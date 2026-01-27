@@ -31,17 +31,7 @@ def validate_email(email):
 
 
 def validate_password(password):
-    """
-    Validate password strength.
-    Requirements:
-    - At least 8 characters
-    - Contains uppercase letter
-    - Contains lowercase letter
-    - Contains digit
-    - Contains special character
-    
-    Returns (is_valid, error_message)
-    """
+   
     if not password:
         return False, "Password is required"
     

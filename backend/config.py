@@ -26,7 +26,7 @@ class Config:
     
     # Validate MongoDB URI is set
     if not MONGODB_URI:
-        print("❌ ERROR: MONGODB_URI is not set in .env file!")
+        print(" ERROR: MONGODB_URI is not set in .env file!")
     
     # JWT Configuration
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', SECRET_KEY)
