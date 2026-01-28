@@ -8,6 +8,7 @@ from flask_cors import CORS
 from config import Config
 from database import Database, create_indexes
 from routes.auth_routes import auth_routes
+from routes.cost_routes import cost_routes
 
 
 def create_app(config=Config):
@@ -38,6 +39,7 @@ def create_app(config=Config):
     
     # Register blueprints (routes)
     app.register_blueprint(auth_routes)
+    app.register_blueprint(cost_routes)
     
     # Root endpoint
     @app.route('/', methods=['GET'])
@@ -121,17 +123,23 @@ if __name__ == '__main__':
     
     app = create_app()
     
-    # Only show message on first run (not on reloader restart)
-    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
-        print("\nServer running on http://localhost:5000\n")
+    print("\n" + "="*60)
+    print("🚀 Server starting on http://localhost:5000")
+    print("="*60)
+    print("Press CTRL+C to stop the server")
+    print("="*60 + "\n")
     
     try:
         app.run(
-            host='0.0.0.0',
+            host='127.0.0.1',
             port=5000,
-            debug=False,  # Disable debug to avoid Windows socket errors
-            use_reloader=False
+            debug=False,
+            use_reloader=False,
+            threaded=True
         )
+    except KeyboardInterrupt:
+        print("\n\n✅ Server stopped")
+    except Exception as e:
+        print(f"\n❌ Server error: {e}")
     finally:
-        # Close database connection on shutdown
         Database.close()

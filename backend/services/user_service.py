@@ -223,16 +223,3 @@ def get_all_users():
     users_collection = get_collection(Collections.USERS)
     users = list(users_collection.find())
     return [User.sanitize(user) for user in users]
-
-
-
-def get_all_users():
-    """Get all users (without passwords) - for admin purposes."""
-    users = load_users()
-    return [{
-        'id': user['id'],
-        'name': user['name'],
-        'email': user['email'],
-        'created_at': user['created_at'],
-        'last_login': user.get('last_login')
-    } for user in users]

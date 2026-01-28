@@ -151,12 +151,18 @@ def create_indexes():
         db[Collections.USERS].create_index("created_at")
         
         # Cloud costs collection indexes
+        # Compound index for user_id + usage_start_date (most common query pattern)
         db[Collections.CLOUD_COSTS].create_index([
             ("user_id", 1),
-            ("date", -1)
+            ("usage_start_date", -1)
         ])
+        # Individual indexes for filtering
+        db[Collections.CLOUD_COSTS].create_index("provider")
         db[Collections.CLOUD_COSTS].create_index("service_name")
-        db[Collections.CLOUD_COSTS].create_index("date")
+        db[Collections.CLOUD_COSTS].create_index("region")
+        db[Collections.CLOUD_COSTS].create_index("billing_period")
+        db[Collections.CLOUD_COSTS].create_index("usage_start_date")
+        db[Collections.CLOUD_COSTS].create_index("cost")
         
         # Anomalies collection indexes
         db[Collections.ANOMALIES].create_index([
