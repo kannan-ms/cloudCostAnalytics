@@ -155,20 +155,7 @@ class UsageMetric:
         unit: str,
         timestamp: datetime
     ) -> Dict:
-        """
-        Create a new usage metric document.
         
-        Args:
-            user_id: User's MongoDB ObjectId as string
-            service_name: Cloud service name
-            metric_name: Name of the metric (e.g., 'cpu_usage', 'memory_usage')
-            value: Metric value
-            unit: Unit of measurement
-            timestamp: Timestamp of the metric
-            
-        Returns:
-            Dict: Usage metric document ready for MongoDB insertion
-        """
         return {
             "user_id": ObjectId(user_id),
             "service_name": service_name,
