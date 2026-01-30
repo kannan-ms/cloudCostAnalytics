@@ -1,0 +1,21 @@
+provider,service_name,cost,usage_start_date,usage_end_date,region,cloud_account_id,resource_id,usage_quantity,usage_unit,currency
+AWS,EC2,150.50,2026-01-01,2026-01-15,us-east-1,123456789012,i-abc123,360,Hours,USD
+AWS,S3,45.20,2026-01-01,2026-01-15,us-east-1,123456789012,bucket-data,500,GB,USD
+AWS,RDS,220.00,2026-01-01,2026-01-15,us-west-2,123456789012,db-instance-01,360,Hours,USD
+Azure,Virtual Machines,180.75,2026-01-01,2026-01-15,East US,sub-12345,vm-prod-01,360,Hours,USD
+Azure,Storage,30.50,2026-01-01,2026-01-15,East US,sub-12345,storage-account,800,GB,USD
+GCP,Compute Engine,195.00,2026-01-01,2026-01-15,us-central1,project-123,instance-prod,360,Hours,USD
+AWS,Lambda,12.50,2026-01-01,2026-01-15,us-east-1,123456789012,lambda-api,1000000,Requests,USD
+AWS,DynamoDB,55.00,2026-01-01,2026-01-15,us-east-1,123456789012,table-users,100,GB,USD
+Azure,SQL Database,175.00,2026-01-01,2026-01-15,West Europe,sub-12345,sqldb-prod,360,Hours,USD
+GCP,Cloud Storage,28.00,2026-01-01,2026-01-15,us-central1,project-123,bucket-backups,600,GB,USD
+AWS,EC2,300.00,2026-01-16,2026-01-30,us-east-1,123456789012,i-abc123,360,Hours,USD
+AWS,S3,52.30,2026-01-16,2026-01-30,us-east-1,123456789012,bucket-data,580,GB,USD
+AWS,RDS,220.00,2026-01-16,2026-01-30,us-west-2,123456789012,db-instance-01,360,Hours,USD
+Azure,Virtual Machines,180.75,2026-01-16,2026-01-30,East US,sub-12345,vm-prod-01,360,Hours,USD
+Azure,Storage,35.00,2026-01-16,2026-01-30,East US,sub-12345,storage-account,900,GB,USD
+GCP,Compute Engine,195.00,2026-01-16,2026-01-30,us-central1,project-123,instance-prod,360,Hours,USD
+AWS,Lambda,18.75,2026-01-16,2026-01-30,us-east-1,123456789012,lambda-api,1500000,Requests,USD
+AWS,DynamoDB,60.00,2026-01-16,2026-01-30,us-east-1,123456789012,table-users,110,GB,USD
+Azure,SQL Database,175.00,2026-01-16,2026-01-30,West Europe,sub-12345,sqldb-prod,360,Hours,USD
+GCP,Cloud Storage,32.50,2026-01-16,2026-01-30,us-central1,project-123,bucket-backups,700,GB,USD

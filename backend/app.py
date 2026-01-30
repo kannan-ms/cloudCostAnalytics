@@ -9,6 +9,7 @@ from config import Config
 from database import Database, create_indexes
 from routes.auth_routes import auth_routes
 from routes.cost_routes import cost_routes
+from routes.anomaly_routes import anomaly_routes
 
 
 def create_app(config=Config):
@@ -40,6 +41,7 @@ def create_app(config=Config):
     # Register blueprints (routes)
     app.register_blueprint(auth_routes)
     app.register_blueprint(cost_routes)
+    app.register_blueprint(anomaly_routes)
     
     # Root endpoint
     @app.route('/', methods=['GET'])
@@ -71,7 +73,13 @@ def create_app(config=Config):
                 'POST /api/auth/register',
                 'POST /api/auth/login',
                 'GET /api/auth/verify',
-                'GET /api/auth/me'
+                'GET /api/auth/me',
+                'POST /api/costs/ingest',
+                'POST /api/costs/ingest/bulk',
+                'POST /api/costs/upload',
+                'GET /api/costs/upload/template',
+                'GET /api/costs',
+                'GET /api/costs/summary'
             ]
         }), 200
     
@@ -125,9 +133,9 @@ if __name__ == '__main__':
     
     print("\n" + "="*60)
     print("🚀 Server starting on http://localhost:5000")
-    print("="*60)
-    print("Press CTRL+C to stop the server")
-    print("="*60 + "\n")
+    #print("="*60)
+    #print("Press CTRL+C to stop the server")
+    #print("="*60 + "\n")
     
     try:
         app.run(

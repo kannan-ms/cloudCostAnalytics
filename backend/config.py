@@ -18,7 +18,7 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production-make-it-strong')
     
     # CORS settings
-    CORS_ORIGINS = ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173']
+    CORS_ORIGINS = ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:5174']
     
     # MongoDB Atlas Configuration
     MONGODB_URI = os.getenv('MONGODB_URI')

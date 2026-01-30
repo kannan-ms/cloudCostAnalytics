@@ -9,6 +9,7 @@ import jwt
 from datetime import datetime
 from config import Config
 from services import cost_service, user_service
+from services.file_parser import parse_file
 
 cost_routes = Blueprint('costs', __name__, url_prefix='/api/costs')
 
@@ -461,6 +462,357 @@ def get_summary(current_user_id):
         
     except Exception as e:
         return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+
+@cost_routes.route('/trends/daily', methods=['GET'])
+@token_required
+def get_daily_trends(current_user_id):
+    """
+    Get daily cost trends.
+    
+    GET /api/costs/trends/daily
+    
+    Query Parameters:
+    - start_date: Start date (ISO 8601, optional, default: 30 days ago)
+    - end_date: End date (ISO 8601, optional, default: today)
+    
+    Response:
+    {
+        "success": true,
+        "trends": [
+            {"date": "2026-01-01", "total_cost": 450.50, "record_count": 25},
+            ...
+        ],
+        "summary": {
+            "total_cost": 13500.00,
+            "average_daily_cost": 450.00,
+            "days_count": 30
+        }
+    }
+    """
+    try:
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+        
+        start_date = None
+        end_date = None
+        
+        if start_date_str:
+            try:
+                start_date = datetime.fromisoformat(start_date_str.replace('Z', '+00:00'))
+            except ValueError:
+                return jsonify({'error': 'Invalid start_date format'}), 400
+        
+        if end_date_str:
+            try:
+                end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+            except ValueError:
+                return jsonify({'error': 'Invalid end_date format'}), 400
+        
+        success, result = cost_service.get_daily_trends(current_user_id, start_date, end_date)
+        
+        if not success:
+            return jsonify({'error': result}), 400
+        
+        return jsonify({
+            'success': True,
+            **result
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+
+@cost_routes.route('/trends/auto', methods=['GET'])
+@token_required
+def get_auto_trends(current_user_id):
+    """
+    Automatically detect date range and return trends from user's actual data.
+    """
+    print(f"DEBUG: get_auto_trends called for user {current_user_id}")
+    try:
+        success, result = cost_service.get_auto_trends(current_user_id)
+        print(f"DEBUG: get_auto_trends result success={success}")
+        
+        if not success:
+            return jsonify({'error': result}), 400
+        
+        return jsonify({
+            'success': True,
+            **result
+        }), 200
+        
+    except Exception as e:
+        print(f"DEBUG: get_auto_trends error: {e}")
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+
+@cost_routes.route('/trends/monthly', methods=['GET'])
+@token_required
+def get_monthly_trends(current_user_id):
+    """
+    Get monthly cost trends.
+    
+    GET /api/costs/trends/monthly
+    
+    Query Parameters:
+    - months: Number of months to include (default: 6)
+    
+    Response:
+    {
+        "success": true,
+        "trends": [
+            {
+                "month": "2025-12",
+                "total_cost": 5200.00,
+                "record_count": 150,
+                "unique_services": 8,
+                "change_percentage": 12.5
+            },
+            ...
+        ]
+    }
+    """
+    try:
+        months = int(request.args.get('months', 6))
+        
+        if months < 1 or months > 24:
+            return jsonify({'error': 'Months must be between 1 and 24'}), 400
+        
+        success, result = cost_service.get_monthly_trends(current_user_id, months)
+        
+        if not success:
+            return jsonify({'error': result}), 400
+        
+        return jsonify({
+            'success': True,
+            **result
+        }), 200
+        
+    except ValueError:
+        return jsonify({'error': 'Invalid months parameter'}), 400
+    except Exception as e:
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+
+@cost_routes.route('/comparison', methods=['GET'])
+@token_required
+def get_comparison(current_user_id):
+    """
+    Compare costs between two periods.
+    
+    GET /api/costs/comparison
+    
+    Query Parameters:
+    - current_start: Current period start (ISO 8601)
+    - current_end: Current period end (ISO 8601)
+    - previous_start: Previous period start (ISO 8601)
+    - previous_end: Previous period end (ISO 8601)
+    
+    Response:
+    {
+        "success": true,
+        "comparisons": [
+            {
+                "service_name": "EC2",
+                "current_cost": 1500.00,
+                "previous_cost": 1200.00,
+                "difference": 300.00,
+                "change_percentage": 25.0,
+                "status": "increased"
+            }
+        ],
+        "summary": {...}
+    }
+    """
+    try:
+        current_start_str = request.args.get('current_start')
+        current_end_str = request.args.get('current_end')
+        previous_start_str = request.args.get('previous_start')
+        previous_end_str = request.args.get('previous_end')
+        
+        if not all([current_start_str, current_end_str, previous_start_str, previous_end_str]):
+            return jsonify({'error': 'All date parameters are required'}), 400
+        
+        try:
+            current_start = datetime.fromisoformat(current_start_str.replace('Z', '+00:00'))
+            current_end = datetime.fromisoformat(current_end_str.replace('Z', '+00:00'))
+            previous_start = datetime.fromisoformat(previous_start_str.replace('Z', '+00:00'))
+            previous_end = datetime.fromisoformat(previous_end_str.replace('Z', '+00:00'))
+        except ValueError:
+            return jsonify({'error': 'Invalid date format. Use ISO 8601'}), 400
+        
+        success, result = cost_service.get_cost_comparison(
+            current_user_id,
+            current_start,
+            current_end,
+            previous_start,
+            previous_end
+        )
+        
+        if not success:
+            return jsonify({'error': result}), 400
+        
+        return jsonify({
+            'success': True,
+            **result
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+
+@cost_routes.route('/top-resources', methods=['GET'])
+@token_required
+def get_top_resources(current_user_id):
+    """
+    Get top cost resources.
+    
+    GET /api/costs/top-resources
+    
+    Query Parameters:
+    - limit: Number of resources (default: 10, max: 50)
+    - start_date: Optional start date
+    - end_date: Optional end date
+    
+    Response:
+    {
+        "success": true,
+        "top_resources": [
+            {
+                "service_name": "EC2",
+                "resource_id": "i-1234567890",
+                "region": "us-east-1",
+                "total_cost": 2500.00,
+                "record_count": 30
+            }
+        ]
+    }
+    """
+    try:
+        limit = int(request.args.get('limit', 10))
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+        
+        if limit < 1 or limit > 50:
+            return jsonify({'error': 'Limit must be between 1 and 50'}), 400
+        
+        start_date = None
+        end_date = None
+        
+        if start_date_str:
+            try:
+                start_date = datetime.fromisoformat(start_date_str.replace('Z', '+00:00'))
+            except ValueError:
+                return jsonify({'error': 'Invalid start_date format'}), 400
+        
+        if end_date_str:
+            try:
+                end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+            except ValueError:
+                return jsonify({'error': 'Invalid end_date format'}), 400
+        
+        success, result = cost_service.get_top_resources(current_user_id, limit, start_date, end_date)
+        
+        if not success:
+            return jsonify({'error': result}), 400
+        
+        return jsonify({
+            'success': True,
+            **result
+        }), 200
+        
+    except ValueError:
+        return jsonify({'error': 'Invalid limit parameter'}), 400
+    except Exception as e:
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+
+@cost_routes.route('/upload', methods=['POST'])
+@token_required
+def upload_cost_file(current_user_id):
+    """
+    Upload and process CSV or Excel file with cost data.
+    """
+    print(f"DEBUG: upload_cost_file called for user {current_user_id}")
+    try:
+        # Check if file is in request
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided. Please upload a file with key "file"'}), 400
+        
+        file = request.files['file']
+        
+        # Check if filename is empty
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Read file content
+        file_content = file.read()
+        
+        if not file_content:
+            return jsonify({'error': 'File is empty'}), 400
+        
+        # Parse file
+        success, result = parse_file(file.filename, file_content)
+        
+        if not success:
+            return jsonify({'error': result}), 400
+        
+        records = result
+        
+        # Bulk ingest the parsed records
+        success, ingest_result = cost_service.bulk_ingest_costs(current_user_id, records)
+        
+        if not success:
+            return jsonify({'error': ingest_result.get('error', 'Failed to ingest records')}), 400
+        
+        # Determine status code
+        if ingest_result['error_count'] == 0:
+            status_code = 201
+            message = 'File processed successfully. All records imported.'
+        elif ingest_result['success_count'] > 0:
+            status_code = 207  # Multi-Status
+            message = f"File processed with warnings. {ingest_result['success_count']} records imported, {ingest_result['error_count']} failed."
+        else:
+            status_code = 400
+            message = 'File processing failed. No records were imported.'
+        
+        return jsonify({
+            'success': ingest_result['success_count'] > 0,
+            'message': message,
+            'filename': file.filename,
+            'total_records': ingest_result['total_records'],
+            'success_count': ingest_result['success_count'],
+            'error_count': ingest_result['error_count'],
+            'sample_errors': ingest_result['errors'][:5] if ingest_result['errors'] else []
+        }), status_code
+        
+    except Exception as e:
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+
+@cost_routes.route('/upload/template', methods=['GET'])
+def download_template():
+    """
+    Download a CSV template file for cost data upload.
+    
+    GET /api/costs/upload/template
+    
+    Response: CSV file download
+    """
+    from flask import make_response
+    
+    template_content = """provider,service_name,cost,usage_start_date,usage_end_date,region,cloud_account_id,resource_id,usage_quantity,usage_unit,currency,tags
+AWS,EC2,150.50,2026-01-01,2026-01-31,us-east-1,123456789012,i-1234567890abcdef0,744,Hours,USD,{"Environment":"Production"}
+Azure,Virtual Machines,200.00,2026-01-01,2026-01-31,East US,sub-12345,vm-instance-001,720,Hours,USD,{"Team":"DevOps"}
+GCP,Compute Engine,180.75,2026-01-01,2026-01-31,us-central1,project-123,instance-456,744,Hours,USD,{"App":"WebServer"}
+"""
+    
+    response = make_response(template_content)
+    response.headers['Content-Type'] = 'text/csv'
+    response.headers['Content-Disposition'] = 'attachment; filename=cost_data_template.csv'
+    
+    return response
 
 
 # Error handlers

@@ -517,3 +517,431 @@ def get_cost_summary(
         
     except Exception as e:
         return False, f"Error generating summary: {str(e)}"
+
+
+def get_daily_trends(
+    user_id: str,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None
+) -> Tuple[bool, any]:
+    """
+    Get daily cost trends.
+    
+    Args:
+        user_id: User's ID
+        start_date: Start date for filtering
+        end_date: End date for filtering
+    
+    Returns:
+        (success, trends_or_error)
+    """
+    try:
+        costs_collection = get_collection(Collections.CLOUD_COSTS)
+        
+        # Default to last 30 days if no dates provided
+        if not end_date:
+            end_date = datetime.utcnow()
+        if not start_date:
+            start_date = end_date - timedelta(days=30)
+        
+        # Build match stage
+        match_stage = {
+            "user_id": ObjectId(user_id),
+            "usage_start_date": {"$gte": start_date, "$lte": end_date}
+        }
+        
+        # Aggregation pipeline
+        pipeline = [
+            {"$match": match_stage},
+            {"$group": {
+                "_id": {
+                    "$dateToString": {"format": "%Y-%m-%d", "date": "$usage_start_date"}
+                },
+                "total_cost": {"$sum": "$cost"},
+                "record_count": {"$sum": 1}
+            }},
+            {"$sort": {"_id": 1}}
+        ]
+        
+        results = list(costs_collection.aggregate(pipeline))
+        
+        trends = [
+            {
+                "date": r['_id'],
+                "total_cost": round(r['total_cost'], 2),
+                "record_count": r['record_count']
+            }
+            for r in results
+        ]
+        
+        # Calculate statistics
+        total = sum(t['total_cost'] for t in trends)
+        avg_daily = total / len(trends) if trends else 0
+        
+        return True, {
+            "trends": trends,
+            "summary": {
+                "total_cost": round(total, 2),
+                "average_daily_cost": round(avg_daily, 2),
+                "days_count": len(trends),
+                "start_date": start_date.strftime("%Y-%m-%d"),
+                "end_date": end_date.strftime("%Y-%m-%d")
+            }
+        }
+        
+    except Exception as e:
+        return False, f"Error generating daily trends: {str(e)}"
+
+
+def get_monthly_trends(
+    user_id: str,
+    months: int = 6
+) -> Tuple[bool, any]:
+    """
+    Get monthly cost trends for the last N months.
+    
+    Args:
+        user_id: User's ID
+        months: Number of months to include
+    
+    Returns:
+        (success, trends_or_error)
+    """
+    try:
+        costs_collection = get_collection(Collections.CLOUD_COSTS)
+        
+        # Calculate date range
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=months * 31)
+        
+        # Build match stage
+        match_stage = {
+            "user_id": ObjectId(user_id),
+            "usage_start_date": {"$gte": start_date, "$lte": end_date}
+        }
+        
+        # Aggregation pipeline
+        pipeline = [
+            {"$match": match_stage},
+            {"$group": {
+                "_id": "$billing_period",
+                "total_cost": {"$sum": "$cost"},
+                "record_count": {"$sum": 1},
+                "services": {"$addToSet": "$service_name"}
+            }},
+            {"$sort": {"_id": 1}}
+        ]
+        
+        results = list(costs_collection.aggregate(pipeline))
+        
+        trends = [
+            {
+                "month": r['_id'],
+                "total_cost": round(r['total_cost'], 2),
+                "record_count": r['record_count'],
+                "unique_services": len(r['services'])
+            }
+            for r in results
+        ]
+        
+        # Calculate month-over-month changes
+        for i in range(1, len(trends)):
+            previous = trends[i-1]['total_cost']
+            current = trends[i]['total_cost']
+            if previous > 0:
+                change = ((current - previous) / previous) * 100
+                trends[i]['change_percentage'] = round(change, 2)
+        
+        return True, {
+            "trends": trends,
+            "summary": {
+                "months_count": len(trends),
+                "total_cost": round(sum(t['total_cost'] for t in trends), 2)
+            }
+        }
+        
+    except Exception as e:
+        return False, f"Error generating monthly trends: {str(e)}"
+
+
+def get_cost_comparison(
+    user_id: str,
+    current_start: datetime,
+    current_end: datetime,
+    previous_start: datetime,
+    previous_end: datetime
+) -> Tuple[bool, any]:
+    """
+    Compare costs between two time periods.
+    
+    Args:
+        user_id: User's ID
+        current_start: Current period start date
+        current_end: Current period end date
+        previous_start: Previous period start date
+        previous_end: Previous period end date
+    
+    Returns:
+        (success, comparison_or_error)
+    """
+    try:
+        costs_collection = get_collection(Collections.CLOUD_COSTS)
+        
+        # Get current period costs
+        current_costs = list(costs_collection.aggregate([
+            {"$match": {
+                "user_id": ObjectId(user_id),
+                "usage_start_date": {"$gte": current_start, "$lte": current_end}
+            }},
+            {"$group": {
+                "_id": "$service_name",
+                "total_cost": {"$sum": "$cost"},
+                "record_count": {"$sum": 1}
+            }}
+        ]))
+        
+        # Get previous period costs
+        previous_costs = list(costs_collection.aggregate([
+            {"$match": {
+                "user_id": ObjectId(user_id),
+                "usage_start_date": {"$gte": previous_start, "$lte": previous_end}
+            }},
+            {"$group": {
+                "_id": "$service_name",
+                "total_cost": {"$sum": "$cost"},
+                "record_count": {"$sum": 1}
+            }}
+        ]))
+        
+        # Create lookup dictionaries
+        current_dict = {c['_id']: c['total_cost'] for c in current_costs}
+        previous_dict = {p['_id']: p['total_cost'] for p in previous_costs}
+        
+        # Get all services
+        all_services = set(current_dict.keys()) | set(previous_dict.keys())
+        
+        # Build comparison
+        comparisons = []
+        for service in all_services:
+            current_cost = current_dict.get(service, 0)
+            previous_cost = previous_dict.get(service, 0)
+            
+            if previous_cost > 0:
+                change_percentage = ((current_cost - previous_cost) / previous_cost) * 100
+            elif current_cost > 0:
+                change_percentage = 100  # New service
+            else:
+                change_percentage = 0
+            
+            comparisons.append({
+                "service_name": service,
+                "current_cost": round(current_cost, 2),
+                "previous_cost": round(previous_cost, 2),
+                "difference": round(current_cost - previous_cost, 2),
+                "change_percentage": round(change_percentage, 2),
+                "status": "increased" if change_percentage > 0 else "decreased" if change_percentage < 0 else "stable"
+            })
+        
+        # Sort by absolute change
+        comparisons.sort(key=lambda x: abs(x['difference']), reverse=True)
+        
+        # Calculate totals
+        total_current = sum(current_dict.values())
+        total_previous = sum(previous_dict.values())
+        total_change = total_current - total_previous
+        total_change_pct = (total_change / total_previous * 100) if total_previous > 0 else 0
+        
+        return True, {
+            "comparisons": comparisons,
+            "summary": {
+                "current_period": {
+                    "start": current_start.strftime("%Y-%m-%d"),
+                    "end": current_end.strftime("%Y-%m-%d"),
+                    "total_cost": round(total_current, 2)
+                },
+                "previous_period": {
+                    "start": previous_start.strftime("%Y-%m-%d"),
+                    "end": previous_end.strftime("%Y-%m-%d"),
+                    "total_cost": round(total_previous, 2)
+                },
+                "total_difference": round(total_change, 2),
+                "total_change_percentage": round(total_change_pct, 2)
+            }
+        }
+        
+    except Exception as e:
+        return False, f"Error generating comparison: {str(e)}"
+
+
+def get_top_resources(
+    user_id: str,
+    limit: int = 10,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None
+) -> Tuple[bool, any]:
+    """
+    Get top cost resources.
+    
+    Args:
+        user_id: User's ID
+        limit: Number of top resources to return
+        start_date: Optional start date
+        end_date: Optional end date
+    
+    Returns:
+        (success, resources_or_error)
+    """
+    try:
+        costs_collection = get_collection(Collections.CLOUD_COSTS)
+        
+        # Build match stage
+        match_stage = {"user_id": ObjectId(user_id)}
+        if start_date or end_date:
+            match_stage["usage_start_date"] = {}
+            if start_date:
+                match_stage["usage_start_date"]["$gte"] = start_date
+            if end_date:
+                match_stage["usage_start_date"]["$lte"] = end_date
+        
+        # Aggregation pipeline
+        pipeline = [
+            {"$match": match_stage},
+            {"$group": {
+                "_id": {
+                    "service": "$service_name",
+                    "resource": "$resource_id",
+                    "region": "$region"
+                },
+                "total_cost": {"$sum": "$cost"},
+                "record_count": {"$sum": 1}
+            }},
+            {"$sort": {"total_cost": -1}},
+            {"$limit": limit}
+        ]
+        
+        results = list(costs_collection.aggregate(pipeline))
+        
+        resources = [
+            {
+                "service_name": r['_id']['service'],
+                "resource_id": r['_id']['resource'] or "N/A",
+                "region": r['_id']['region'],
+                "total_cost": round(r['total_cost'], 2),
+                "record_count": r['record_count']
+            }
+            for r in results
+        ]
+        
+        return True, {"top_resources": resources}
+        
+    except Exception as e:
+        return False, f"Error getting top resources: {str(e)}"
+
+def get_auto_trends(user_id: str) -> Tuple[bool, any]:
+    """
+    Automatically detect date range from user's data and return trends.
+    Groups by billing_period if available, otherwise by month from usage_start_date.
+    
+    Args:
+        user_id: User's ID
+    
+    Returns:
+        (success, trends_or_error)
+    """
+    try:
+        costs_collection = get_collection(Collections.CLOUD_COSTS)
+        
+        # First, get the date range of the user's data
+        user_oid = ObjectId(user_id)
+        date_range = costs_collection.aggregate([
+            {"$match": {"user_id": user_oid}},
+            {"$group": {
+                "_id": None,
+                "min_date": {"$min": "$usage_start_date"},
+                "max_date": {"$max": "$usage_start_date"},
+                "count": {"$sum": 1}
+            }}
+        ])
+        
+        date_info = list(date_range)
+        if not date_info or date_info[0]['count'] == 0:
+            return True, {
+                "trends": [],
+                "summary": {
+                    "periods_count": 0,
+                    "total_cost": 0,
+                    "date_range": None
+                }
+            }
+        
+        min_date = date_info[0]['min_date']
+        max_date = date_info[0]['max_date']
+        
+        # Aggregation pipeline - group by billing_period or date
+        pipeline = [
+            {"$match": {"user_id": user_oid}},
+            {"$group": {
+                "_id": {
+                    "$cond": [
+                        {"$ifNull": ["$billing_period", False]},
+                        "$billing_period",
+                        {
+                            "$dateToString": {
+                                "format": "%Y-%m",
+                                "date": "$usage_start_date"
+                            }
+                        }
+                    ]
+                },
+                "total_cost": {"$sum": "$cost"},
+                "record_count": {"$sum": 1},
+                "services": {"$addToSet": "$service_name"},
+                "min_date": {"$min": "$usage_start_date"},
+                "max_date": {"$max": "$usage_end_date"}
+            }},
+            {"$sort": {"_id": 1}}
+        ]
+        
+        results = list(costs_collection.aggregate(pipeline))
+        
+        trends = [
+            {
+                "period": r['_id'],
+                "total_cost": round(r['total_cost'], 2),
+                "record_count": r['record_count'],
+                "unique_services": len(r['services']),
+                "date_range": {
+                    "start": r['min_date'].strftime('%Y-%m-%d') if r.get('min_date') else None,
+                    "end": r['max_date'].strftime('%Y-%m-%d') if r.get('max_date') else None
+                }
+            }
+            for r in results
+        ]
+        
+        # Calculate period-over-period changes
+        for i in range(1, len(trends)):
+            previous = trends[i-1]['total_cost']
+            current = trends[i]['total_cost']
+            if previous > 0:
+                change = ((current - previous) / previous) * 100
+                trends[i]['change_percentage'] = round(change, 2)
+            else:
+                trends[i]['change_percentage'] = 0
+        
+        total_cost = sum(t['total_cost'] for t in trends)
+        
+        return True, {
+            "trends": trends,
+            "summary": {
+                "periods_count": len(trends),
+                "total_cost": round(total_cost, 2),
+                "average_cost": round(total_cost / len(trends), 2) if len(trends) > 0 else 0,
+                "date_range": {
+                    "start": min_date.strftime('%Y-%m-%d'),
+                    "end": max_date.strftime('%Y-%m-%d')
+                }
+            }
+        }
+        
+    except Exception as e:
+        return False, f"Error generating auto trends: {str(e)}"
