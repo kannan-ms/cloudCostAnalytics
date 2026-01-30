@@ -119,6 +119,7 @@ class Collections:
     """Database collection names."""
     USERS = "users"
     CLOUD_COSTS = "cloud_costs"
+    COST_RECORDS = "cost_records"
     ANOMALIES = "anomalies"
     USAGE_METRICS = "usage_metrics"
     ALERTS = "alerts"

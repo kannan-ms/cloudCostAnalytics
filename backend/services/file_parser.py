@@ -1,12 +1,25 @@
 """
 File Parser Service - Parse CSV and Excel files for cost data
 Handles file validation, parsing, and data extraction
+REWRITTEN: Removed pandas dependency for better compatibility
 """
 
-import pandas as pd
 import io
+import csv
+import json
 from datetime import datetime
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
+
+# Optional import for Excel
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
+try:
+    import xlrd
+except ImportError:
+    xlrd = None
 
 
 # Supported file extensions
@@ -26,21 +39,19 @@ def validate_file_size(file_size: int) -> Tuple[bool, Optional[str]]:
     return True, None
 
 
-def parse_date(date_value) -> Optional[datetime]:
+def parse_date(date_value: Any) -> Optional[datetime]:
     """
     Parse various date formats to datetime object.
-    Handles: ISO format, Excel dates, common formats
     """
-    if pd.isna(date_value):
+    if date_value is None or date_value == '':
         return None
     
     # If already datetime
     if isinstance(date_value, datetime):
         return date_value
     
-    # If pandas Timestamp
-    if isinstance(date_value, pd.Timestamp):
-        return date_value.to_pydatetime()
+    # If it's an Excel serial date (float/int), we can't easily parse it without pandas/xlrd helper logic
+    # usually openpyxl gives us datetime objects if the cell is formatted as date.
     
     # If string, try various formats
     if isinstance(date_value, str):
@@ -67,16 +78,17 @@ def parse_date(date_value) -> Optional[datetime]:
 
 def normalize_column_name(col: str) -> str:
     """Normalize column names for flexible matching."""
-    return col.lower().strip().replace(' ', '_').replace('-', '_')
+    if not col:
+        return ""
+    return str(col).lower().strip().replace(' ', '_').replace('-', '_')
 
 
-def map_columns(df: pd.DataFrame) -> Dict[str, str]:
+def map_columns(headers: List[str]) -> Dict[str, str]:
     """
-    Map DataFrame columns to expected field names.
-    Supports flexible column naming.
+    Map file headers to expected field names.
     """
     column_mapping = {}
-    normalized_cols = {normalize_column_name(col): col for col in df.columns}
+    normalized_cols = {normalize_column_name(col): col for col in headers}
     
     # Define possible column name variations
     field_mappings = {
@@ -105,9 +117,9 @@ def map_columns(df: pd.DataFrame) -> Dict[str, str]:
     return column_mapping
 
 
-def parse_tags(tag_value) -> Dict:
+def parse_tags(tag_value: Any) -> Dict:
     """Parse tags from various formats."""
-    if pd.isna(tag_value):
+    if not tag_value:
         return {}
     
     if isinstance(tag_value, dict):
@@ -115,7 +127,6 @@ def parse_tags(tag_value) -> Dict:
     
     if isinstance(tag_value, str):
         # Try JSON format
-        import json
         try:
             return json.loads(tag_value)
         except:
@@ -134,128 +145,129 @@ def parse_tags(tag_value) -> Dict:
     return {}
 
 
-def extract_cost_records(df: pd.DataFrame, column_mapping: Dict[str, str]) -> List[Dict]:
+def extract_cost_records(rows: List[Dict[str, Any]], column_mapping: Dict[str, str]) -> List[Dict]:
     """
-    Extract cost records from DataFrame using column mapping.
+    Extract cost records from list of dictionaries (rows) using column mapping.
     """
     records = []
     
-    for idx, row in df.iterrows():
+    for row in rows:
         try:
             record = {}
             
+            # Helper to safely get value from row
+            def get_val(field_key):
+                col_name = column_mapping.get(field_key)
+                if col_name and col_name in row:
+                    return row[col_name]
+                return None
+            
             # Provider (required)
-            if 'provider' in column_mapping:
-                provider = row[column_mapping['provider']]
-                if pd.notna(provider):
-                    record['provider'] = str(provider).strip()
+            provider = get_val('provider')
+            if provider:
+                record['provider'] = str(provider).strip()
             
             # Service name (required)
-            if 'service_name' in column_mapping:
-                service = row[column_mapping['service_name']]
-                if pd.notna(service):
-                    record['service_name'] = str(service).strip()
+            service = get_val('service_name')
+            if service:
+                record['service_name'] = str(service).strip()
             
             # Cost (required)
-            if 'cost' in column_mapping:
-                cost = row[column_mapping['cost']]
-                if pd.notna(cost):
-                    try:
-                        # Handle currency symbols and commas
-                        if isinstance(cost, str):
-                            cost = cost.replace('$', '').replace('€', '').replace('£', '').replace(',', '').strip()
-                        record['cost'] = float(cost)
-                    except:
-                        continue
+            cost = get_val('cost')
+            if cost is not None:
+                try:
+                    # Handle currency symbols and commas if valid string
+                    if isinstance(cost, str):
+                        cost = cost.replace('$', '').replace('€', '').replace('£', '').replace(',', '').strip()
+                    record['cost'] = float(cost)
+                except:
+                    continue
             
             # Dates (required)
-            if 'usage_start_date' in column_mapping:
-                start_date = parse_date(row[column_mapping['usage_start_date']])
-                if start_date:
-                    record['usage_start_date'] = start_date.isoformat()
+            start_date = parse_date(get_val('usage_start_date'))
+            if start_date:
+                record['usage_start_date'] = start_date.isoformat()
             
-            if 'usage_end_date' in column_mapping:
-                end_date = parse_date(row[column_mapping['usage_end_date']])
-                if end_date:
-                    record['usage_end_date'] = end_date.isoformat()
+            end_date = parse_date(get_val('usage_end_date'))
+            if end_date:
+                record['usage_end_date'] = end_date.isoformat()
             
             # Optional fields
-            if 'cloud_account_id' in column_mapping:
-                account_id = row[column_mapping['cloud_account_id']]
-                if pd.notna(account_id):
-                    record['cloud_account_id'] = str(account_id).strip()
+            account_id = get_val('cloud_account_id')
+            if account_id:
+                record['cloud_account_id'] = str(account_id).strip()
             
-            if 'resource_id' in column_mapping:
-                resource_id = row[column_mapping['resource_id']]
-                if pd.notna(resource_id):
-                    record['resource_id'] = str(resource_id).strip()
+            resource_id = get_val('resource_id')
+            if resource_id:
+                record['resource_id'] = str(resource_id).strip()
             
-            if 'region' in column_mapping:
-                region = row[column_mapping['region']]
-                if pd.notna(region):
-                    record['region'] = str(region).strip()
+            region = get_val('region')
+            if region:
+                record['region'] = str(region).strip()
             
-            if 'usage_quantity' in column_mapping:
-                quantity = row[column_mapping['usage_quantity']]
-                if pd.notna(quantity):
-                    try:
-                        record['usage_quantity'] = float(quantity)
-                    except:
-                        pass
+            quantity = get_val('usage_quantity')
+            if quantity is not None:
+                try:
+                    record['usage_quantity'] = float(quantity)
+                except:
+                    pass
             
-            if 'usage_unit' in column_mapping:
-                unit = row[column_mapping['usage_unit']]
-                if pd.notna(unit):
-                    record['usage_unit'] = str(unit).strip()
+            unit = get_val('usage_unit')
+            if unit:
+                record['usage_unit'] = str(unit).strip()
             
-            if 'currency' in column_mapping:
-                currency = row[column_mapping['currency']]
-                if pd.notna(currency):
-                    record['currency'] = str(currency).strip().upper()
+            currency = get_val('currency')
+            if currency:
+                record['currency'] = str(currency).strip().upper()
             
-            if 'tags' in column_mapping:
-                tags = parse_tags(row[column_mapping['tags']])
-                if tags:
-                    record['tags'] = tags
+            tags = parse_tags(get_val('tags'))
+            if tags:
+                record['tags'] = tags
             
             # Only add record if it has required fields
             if all(k in record for k in ['provider', 'service_name', 'cost', 'usage_start_date', 'usage_end_date']):
                 records.append(record)
         
-        except Exception as e:
+        except Exception:
             # Skip problematic rows
             continue
     
     return records
 
 
-def parse_csv_file(file_content: bytes) -> Tuple[bool, any]:
+def parse_csv_file(file_content: bytes) -> Tuple[bool, Any]:
     """
     Parse CSV file and extract cost records.
-    
-    Returns:
-        (success, records_or_error_message)
     """
     try:
         # Try different encodings
         encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']
-        df = None
+        decoded_content = None
         
         for encoding in encodings:
             try:
-                df = pd.read_csv(io.BytesIO(file_content), encoding=encoding)
+                decoded_content = file_content.decode(encoding)
                 break
             except UnicodeDecodeError:
                 continue
         
-        if df is None:
+        if decoded_content is None:
             return False, "Unable to decode CSV file. Please ensure it's a valid CSV with UTF-8 encoding."
         
-        if df.empty:
-            return False, "CSV file is empty"
+        # Parse CSV to list of dicts
+        f = io.StringIO(decoded_content)
+        reader = csv.DictReader(f)
         
+        # Get headers from the reader
+        if not reader.fieldnames:
+             return False, "CSV file is empty or has no headers"
+             
+        rows = list(reader)
+        if not rows:
+             return False, "CSV file contains no data rows"
+
         # Map columns
-        column_mapping = map_columns(df)
+        column_mapping = map_columns(reader.fieldnames)
         
         # Check for required columns
         required_fields = ['provider', 'service_name', 'cost', 'usage_start_date', 'usage_end_date']
@@ -265,7 +277,7 @@ def parse_csv_file(file_content: bytes) -> Tuple[bool, any]:
             return False, f"Missing required columns: {', '.join(missing_fields)}. Please ensure your CSV has these columns."
         
         # Extract records
-        records = extract_cost_records(df, column_mapping)
+        records = extract_cost_records(rows, column_mapping)
         
         if not records:
             return False, "No valid records found in CSV file"
@@ -276,28 +288,45 @@ def parse_csv_file(file_content: bytes) -> Tuple[bool, any]:
         return False, f"Error parsing CSV file: {str(e)}"
 
 
-def parse_excel_file(file_content: bytes) -> Tuple[bool, any]:
+def parse_excel_file(file_content: bytes) -> Tuple[bool, Any]:
     """
     Parse Excel file and extract cost records.
-    
-    Returns:
-        (success, records_or_error_message)
     """
+    if not openpyxl:
+        return False, "openpyxl library is missing (required for .xlsx)"
+
     try:
-        # Try reading Excel file
-        try:
-            df = pd.read_excel(io.BytesIO(file_content), engine='openpyxl')
-        except:
-            try:
-                df = pd.read_excel(io.BytesIO(file_content), engine='xlrd')
-            except:
-                return False, "Unable to read Excel file. Please ensure it's a valid .xlsx or .xls file."
+        # Load workbook
+        wb = openpyxl.load_workbook(filename=io.BytesIO(file_content), data_only=True)
+        sheet = wb.active
         
-        if df.empty:
+        if sheet.max_row < 2:
             return False, "Excel file is empty"
+            
+        # Get headers (first row)
+        headers = []
+        for cell in sheet[1]:
+            headers.append(str(cell.value) if cell.value is not None else "")
+            
+        # Parse rows to list of dicts
+        rows = []
+        for row in sheet.iter_rows(min_row=2):
+            row_dict = {}
+            has_data = False
+            for idx, cell in enumerate(row):
+                if idx < len(headers):
+                    header = headers[idx]
+                    row_dict[header] = cell.value
+                    if cell.value is not None:
+                        has_data = True
+            if has_data:
+                rows.append(row_dict)
         
+        if not rows:
+            return False, "Excel file contains no data rows"
+
         # Map columns
-        column_mapping = map_columns(df)
+        column_mapping = map_columns(headers)
         
         # Check for required columns
         required_fields = ['provider', 'service_name', 'cost', 'usage_start_date', 'usage_end_date']
@@ -307,7 +336,7 @@ def parse_excel_file(file_content: bytes) -> Tuple[bool, any]:
             return False, f"Missing required columns: {', '.join(missing_fields)}. Please ensure your Excel has these columns."
         
         # Extract records
-        records = extract_cost_records(df, column_mapping)
+        records = extract_cost_records(rows, column_mapping)
         
         if not records:
             return False, "No valid records found in Excel file"
@@ -318,16 +347,9 @@ def parse_excel_file(file_content: bytes) -> Tuple[bool, any]:
         return False, f"Error parsing Excel file: {str(e)}"
 
 
-def parse_file(filename: str, file_content: bytes) -> Tuple[bool, any]:
+def parse_file(filename: str, file_content: bytes) -> Tuple[bool, Any]:
     """
     Parse uploaded file (CSV or Excel) and extract cost records.
-    
-    Args:
-        filename: Name of the uploaded file
-        file_content: Binary content of the file
-    
-    Returns:
-        (success, records_or_error_message)
     """
     # Validate file extension
     if not is_allowed_file(filename):
@@ -342,6 +364,7 @@ def parse_file(filename: str, file_content: bytes) -> Tuple[bool, any]:
     if filename.lower().endswith('.csv'):
         return parse_csv_file(file_content)
     elif filename.lower().endswith(('.xlsx', '.xls')):
+        # Note: .xls support is limited without xlrd, but modern systems use xlsx
         return parse_excel_file(file_content)
     else:
         return False, "Unsupported file format"

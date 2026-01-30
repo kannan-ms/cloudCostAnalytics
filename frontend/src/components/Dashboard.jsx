@@ -34,40 +34,37 @@ function Dashboard() {
       console.log('User data:', userData);
       setUser(userData);
 
-      // Load costs summary
-      console.log('Fetching costs summary...');
-      const summaryRes = await api.get('/costs/summary?group_by=provider');
-      console.log('Summary response:', summaryRes.data);
-      const summary = summaryRes.data.summary;
-      
-      // Load auto trends (automatically detects date range from uploaded data)
-      console.log('Fetching auto trends...');
-      const trendsRes = await api.get('/costs/trends/auto');
-      console.log('Auto trends response:', trendsRes.data);
-      setTrends(trendsRes.data.trends || []);
+      // Load simple monthly cost trends based on uploaded CSV data
+      console.log('Fetching simple cost trends...');
+      const trendsRes = await api.get('/cost-trends');
+      console.log('Simple cost trends response:', trendsRes.data);
 
-      // Load recent costs
-      console.log('Fetching costs...');
-      const costsRes = await api.get('/costs?page=1&page_size=10');
-      console.log('Costs response:', costsRes.data);
-      setCosts(costsRes.data.costs || []);
+      const labels = trendsRes.data.labels || [];
+      const values = trendsRes.data.values || [];
 
-      // Load anomalies
-      console.log('Fetching anomalies...');
-      const anomaliesRes = await api.get('/anomalies?status=new&limit=10');
-      console.log('Anomalies response:', anomaliesRes.data);
-      setAnomalies(anomaliesRes.data.anomalies || []);
+      // Map backend format into objects expected by CostChart and trends table
+      const mappedTrends = labels.map((label, index) => ({
+        month: label,
+        total_cost: values[index] ?? 0,
+        // Placeholders for fields used in the table; anomalies not required at this stage
+        unique_services: '-',
+        record_count: '-',
+        change_percentage: undefined
+      }));
 
-      // Calculate stats
+      setTrends(mappedTrends);
+
+      // Basic stats derived from simple trends only
+      const totalCost = values.reduce((sum, v) => sum + (v || 0), 0);
+      const monthlyAvg = values.length > 0 ? (totalCost / values.length).toFixed(2) : 0;
+
       const calculatedStats = {
-        totalCost: summary.grand_total || 0,
-        monthlyAvg: trendsRes.data.trends?.length > 0 
-          ? (trendsRes.data.summary?.total_cost / trendsRes.data.trends.length).toFixed(2)
-          : 0,
-        servicesCount: summary.groups?.length || 0,
-        anomaliesCount: anomaliesRes.data.count || 0
+        totalCost,
+        monthlyAvg,
+        servicesCount: mappedTrends.length,
+        anomaliesCount: 0 // Anomaly detection is not required at this stage
       };
-      console.log('Calculated stats:', calculatedStats);
+      console.log('Calculated stats (simple):', calculatedStats);
       setStats(calculatedStats);
 
       console.log('Dashboard loaded successfully');
@@ -247,7 +244,7 @@ function Dashboard() {
           <div className="upload-tab">
             <FileUpload 
               onUploadSuccess={loadDashboardData} 
-              onSwitchToOverview={() => setActiveTab('overview')}
+              onSwitchToOverview={() => setActiveTab('trends')}
             />
           </div>
         )}

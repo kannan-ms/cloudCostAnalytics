@@ -3,13 +3,14 @@ Cloud Cost Behaviour Analytics and Anomaly Detection API
 Main Flask application entry point with MongoDB Atlas integration.
 """
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from config import Config
 from database import Database, create_indexes
 from routes.auth_routes import auth_routes
 from routes.cost_routes import cost_routes
 from routes.anomaly_routes import anomaly_routes
+from services.simple_cost_trends import parse_and_store_csv, get_monthly_cost_trends
 
 
 def create_app(config=Config):
@@ -29,11 +30,16 @@ def create_app(config=Config):
         print("❌ Failed to connect to MongoDB Atlas")
         print("Please check your MONGODB_URI in .env file")
     
-    # Enable CORS
+    # Enable CORS (include both /api/* and upload endpoint)
     CORS(app, resources={
         r"/api/*": {
             "origins": config.CORS_ORIGINS,
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"]
+        },
+        r"/upload-cost-data": {
+            "origins": config.CORS_ORIGINS,
+            "methods": ["POST", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"]
         }
     })
@@ -82,6 +88,49 @@ def create_app(config=Config):
                 'GET /api/costs/summary'
             ]
         }), 200
+
+    @app.route('/upload-cost-data', methods=['POST'])
+    def upload_cost_data():
+        """
+        CSV upload endpoint for simple cost trends.
+
+        Requirements:
+        - Accepts a CSV file upload
+        - Validates required columns:
+          provider, service_name, cost, usage_start_date, usage_end_date
+        - Validates date format YYYY-MM-DD
+        - Validates cost is numeric
+        - Stores raw rows in `cost_records` collection
+        """
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part in request. Use form-data with key 'file'."}), 400
+
+        file = request.files['file']
+
+        success, payload = parse_and_store_csv(file)
+        if not success:
+            return jsonify(payload), 400
+
+        return jsonify({
+            "success": True,
+            **payload
+        }), 201
+
+    @app.route('/api/cost-trends', methods=['GET'])
+    def cost_trends():
+        """
+        Get monthly cost trends based on data in `cost_records`.
+
+        Response format:
+        {
+            "labels": ["2024-01", "2024-02", ...],
+            "values": [15420, 17890, ...]
+        }
+
+        Handles empty datasets gracefully by returning empty arrays.
+        """
+        trends = get_monthly_cost_trends()
+        return jsonify(trends), 200
     
     @app.route('/api/health', methods=['GET'])
     def health_check():
