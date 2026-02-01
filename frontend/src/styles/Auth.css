@@ -2,10 +2,11 @@
 
 .auth-container {
   min-height: 100vh;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #001f3f 0%, #003d7a 50%, #0056b3 100%);
+  background: #001f3f;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   padding: 20px;
 }
@@ -20,11 +21,16 @@
   animation: slideUp 0.5s ease-out;
 }
 
+.register-card {
+  max-width: 700px;
+}
+
 @keyframes slideUp {
   from {
     opacity: 0;
     transform: translateY(30px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -98,6 +104,38 @@
 
 .form-input::placeholder {
   color: #94a3b8;
+}
+
+/* Hide native password toggle in Edge/IE */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
+.password-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  transition: color 0.2s;
+  z-index: 5;
+}
+
+.password-toggle-btn:hover {
+  color: #0056b3;
 }
 
 .auth-button {
@@ -184,9 +222,19 @@
 }
 
 @keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-10px); }
-  75% { transform: translateX(10px); }
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  25% {
+    transform: translateX(-10px);
+  }
+
+  75% {
+    transform: translateX(10px);
+  }
 }
 
 .success-message {
@@ -203,7 +251,7 @@
   .auth-card {
     padding: 30px 20px;
   }
-  
+
   .auth-title {
     font-size: 24px;
   }

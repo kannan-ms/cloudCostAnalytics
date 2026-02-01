@@ -1,161 +1,153 @@
-import { useState } from 'react';
-import api from '../services/api';
+import React from 'react';
+import { AlertTriangle, TrendingUp, CheckCircle } from 'lucide-react';
 
-function AnomalyList({ anomalies, showActions = false, onUpdate }) {
-  const [expandedId, setExpandedId] = useState(null);
-
+const AnomalyList = ({ anomalies }) => {
   if (!anomalies || anomalies.length === 0) {
     return (
-      <div className="anomaly-empty">
-        <p>✅ No anomalies detected. Your costs look normal!</p>
+      <div className="empty-state">
+        <CheckCircle size={48} color="var(--status-success)" />
+        <h3>No Anomalies Detected</h3>
+        <p>Your cloud costs are within expected content.</p>
+        <style>{`
+          .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-medium);
+            gap: 16px;
+          }
+        `}</style>
       </div>
     );
   }
 
-  const getSeverityColor = (severity) => {
-    switch (severity) {
-      case 'high': return '#dc2626';
-      case 'medium': return '#f59e0b';
-      case 'low': return '#10b981';
-      default: return '#6b7280';
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'new': return '#3b82f6';
-      case 'acknowledged': return '#f59e0b';
-      case 'resolved': return '#10b981';
-      case 'ignored': return '#6b7280';
-      default: return '#6b7280';
-    }
-  };
-
-  const handleStatusUpdate = async (anomalyId, newStatus) => {
-    try {
-      await api.put(`/anomalies/${anomalyId}/status`, { status: newStatus });
-      if (onUpdate) {
-        onUpdate();
-      }
-    } catch (error) {
-      console.error('Error updating anomaly status:', error);
-      alert('Failed to update anomaly status');
-    }
-  };
-
-  const toggleExpand = (id) => {
-    setExpandedId(expandedId === id ? null : id);
-  };
-
   return (
     <div className="anomaly-list">
-      {anomalies.map((anomaly) => {
-        const isExpanded = expandedId === anomaly._id;
-        
+      {anomalies.map((item, index) => {
+        // Map backend fields to frontend expectations safely
+        const cost = item.detected_value || item.cost || 0;
+        const average = item.expected_value || item.average || 0;
+        const date = item.detected_at || item.date || new Date().toISOString();
+        const service = item.service_name || item.service || 'Unknown Service';
+        const severity = item.severity || 'low';
+
         return (
-          <div 
-            key={anomaly._id} 
-            className={`anomaly-card ${isExpanded ? 'expanded' : ''}`}
-            style={{ borderLeftColor: getSeverityColor(anomaly.severity) }}
-          >
-            <div className="anomaly-header" onClick={() => toggleExpand(anomaly._id)}>
-              <div className="anomaly-title">
-                <span 
-                  className="severity-badge" 
-                  style={{ backgroundColor: getSeverityColor(anomaly.severity) }}
-                >
-                  {anomaly.severity}
-                </span>
-                <span className="anomaly-type">
-                  {anomaly.type ? anomaly.type.replace('_', ' ') : anomaly.service_name}
-                </span>
+          <div key={index} className="anomaly-card">
+            <div className="anomaly-header">
+              <div className={`severity-badge ${severity}`}>
+                {severity}
               </div>
-              <div className="anomaly-meta">
-                <span 
-                  className="status-badge"
-                  style={{ 
-                    backgroundColor: getStatusColor(anomaly.status),
-                    color: '#fff'
-                  }}
-                >
-                  {anomaly.status}
-                </span>
-                <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
-              </div>
+              <div className="anomaly-date">{new Date(date).toLocaleDateString()}</div>
             </div>
 
-            {isExpanded && (
-              <div className="anomaly-details">
-                <div className="anomaly-description">
-                  <p><strong>Description:</strong> {anomaly.message || anomaly.description}</p>
-                  
-                  <div className="details-grid">
-                    {anomaly.detected_value !== undefined && (
-                      <p><strong>Detected Cost:</strong> ${anomaly.detected_value?.toFixed(2)}</p>
-                    )}
-                    {anomaly.expected_value !== undefined && (
-                      <p><strong>Expected Cost:</strong> ${anomaly.expected_value?.toFixed(2)}</p>
-                    )}
-                    {anomaly.deviation_percentage !== undefined && (
-                      <p><strong>Deviation:</strong> {anomaly.deviation_percentage?.toFixed(1)}%</p>
-                    )}
-                    {anomaly.service_name && (
-                      <p><strong>Service:</strong> {anomaly.service_name}</p>
-                    )}
-                    {anomaly.region && anomaly.region !== 'N/A' && (
-                      <p><strong>Region:</strong> {anomaly.region}</p>
-                    )}
+            <div className="anomaly-content">
+              <div className="service-info">
+                <AlertTriangle size={20} className="warning-icon" />
+                <div>
+                  <div className="service-name">{service}</div>
+                  <div className="cost-impact">
+                    +${(cost - average).toFixed(2)} excess
                   </div>
-                </div>
-
-                {anomaly.recommendation && (
-                  <div className="recommendations">
-                    <h4>💡 Recommendations:</h4>
-                    <p>{anomaly.recommendation}</p>
-                  </div>
-                )}
-
-                <div className="anomaly-footer">
-                  <span className="date-detected">
-                    Detected: {new Date(anomaly.detected_at).toLocaleDateString()}
-                  </span>
-                  
-                  {showActions && (
-                    <div className="anomaly-actions">
-                      {anomaly.status === 'new' && (
-                        <>
-                          <button 
-                            className="action-btn acknowledge"
-                            onClick={() => handleStatusUpdate(anomaly._id, 'acknowledged')}
-                          >
-                            Acknowledge
-                          </button>
-                          <button 
-                            className="action-btn ignore"
-                            onClick={() => handleStatusUpdate(anomaly._id, 'ignored')}
-                          >
-                            Ignore
-                          </button>
-                        </>
-                      )}
-                      {anomaly.status === 'acknowledged' && (
-                        <button 
-                          className="action-btn resolve"
-                          onClick={() => handleStatusUpdate(anomaly._id, 'resolved')}
-                        >
-                          Resolve
-                        </button>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
-            )}
+
+              <div className="metric-row">
+                <div className="metric">
+                  <span className="label">Actual</span>
+                  <span className="value">${cost.toFixed(2)}</span>
+                </div>
+                <div className="metric">
+                  <span className="label">Expected</span>
+                  <span className="value">${average.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
           </div>
-        );
+        )
       })}
+
+      <style>{`
+        .anomaly-list {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+          gap: 16px;
+          padding: 10px;
+        }
+
+        .anomaly-card {
+          border: 1px solid var(--border-light);
+          border-radius: 6px;
+          padding: 16px;
+          border-left: 4px solid var(--status-warning);
+          background: #fff;
+        }
+
+        .anomaly-header {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 12px;
+        }
+
+        .severity-badge {
+          text-transform: uppercase;
+          font-size: 10px;
+          font-weight: 700;
+          padding: 2px 8px;
+          border-radius: 10px;
+        }
+
+        .severity-badge.high { background: #ffebee; color: #c62828; }
+        .severity-badge.medium { background: #fff3e0; color: #ef6c00; }
+        .severity-badge.low { background: #e8f5e9; color: #2e7d32; }
+
+        .service-info {
+          display: flex;
+          gap: 12px;
+          margin-bottom: 16px;
+        }
+
+        .warning-icon {
+          color: var(--status-warning);
+        }
+
+        .service-name {
+          font-weight: 700;
+          color: var(--text-dark);
+        }
+
+        .cost-impact {
+          font-size: 12px;
+          color: var(--status-error);
+          font-weight: 600;
+        }
+
+        .metric-row {
+          display: flex;
+          justify-content: space-between;
+          padding-top: 12px;
+          border-top: 1px dashed var(--border-light);
+        }
+
+        .metric {
+          display: flex;
+          flex-direction: column;
+        }
+
+        .metric .label {
+          font-size: 10px;
+          color: var(--text-light);
+          text-transform: uppercase;
+        }
+
+        .metric .value {
+          font-weight: 600;
+          font-size: 14px;
+        }
+      `}</style>
     </div>
   );
-}
+};
 
 export default AnomalyList;

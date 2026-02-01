@@ -69,12 +69,12 @@ function Login() {
 
           <div className="form-group">
             <label className="form-label">Password</label>
-            <div style={{ position: 'relative' }}>
+            <div className="password-wrapper">
               <input
                 type={showPassword ? "text" : "password"}
                 name="password"
                 className="form-input"
-                style={{ paddingRight: '45px' }}
+                style={{ paddingRight: '45px', width: '100%' }}
                 placeholder="Enter your password"
                 value={formData.password}
                 onChange={handleChange}
@@ -83,25 +83,8 @@ function Login() {
               />
               <button
                 type="button"
+                className="password-toggle-btn"
                 onClick={() => setShowPassword(!showPassword)}
-                style={{
-                  position: 'absolute',
-                  right: '15px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '0',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#9ca3af',
-                  opacity: '0.6',
-                  transition: 'opacity 0.2s'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
                 tabIndex="-1"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >

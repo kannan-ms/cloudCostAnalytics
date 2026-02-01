@@ -8,7 +8,7 @@ from functools import wraps
 import jwt
 from datetime import datetime
 from config import Config
-from services import cost_service, user_service
+from services import cost_service, user_service, anomaly_detector
 from services.file_parser import parse_file
 
 cost_routes = Blueprint('costs', __name__, url_prefix='/api/costs')
@@ -531,7 +531,18 @@ def get_auto_trends(current_user_id):
     """
     print(f"DEBUG: get_auto_trends called for user {current_user_id}")
     try:
-        success, result = cost_service.get_auto_trends(current_user_id)
+        # Get optional breakdown parameter
+        breakdown_by = request.args.get('breakdown', 'service')
+        
+        # Extract filters
+        filters = {
+            'service': request.args.get('service'),
+            'region': request.args.get('region'),
+            'account': request.args.get('account'),
+            'provider': request.args.get('provider')
+        }
+        
+        success, result = cost_service.get_auto_trends(current_user_id, breakdown_by, filters)
         print(f"DEBUG: get_auto_trends result success={success}")
         
         if not success:
@@ -544,6 +555,26 @@ def get_auto_trends(current_user_id):
         
     except Exception as e:
         print(f"DEBUG: get_auto_trends error: {e}")
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+
+@cost_routes.route('/filters', methods=['GET'])
+@token_required
+def get_filter_options(current_user_id):
+    """
+    Get available filter options based on user's data.
+    """
+    try:
+        success, result = cost_service.get_filter_options(current_user_id)
+        if not success:
+            return jsonify({'error': result}), 400
+            
+        return jsonify({
+            'success': True,
+            **result
+        }), 200
+
+    except Exception as e:
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 
@@ -759,12 +790,21 @@ def upload_cost_file(current_user_id):
             return jsonify({'error': result}), 400
         
         records = result
+
+        # Clear existing data for a fresh start (per option 2 requirement)
+        print(f"DEBUG: Clearing old data for user {current_user_id} before upload")
+        cost_service.delete_all_costs_for_user(current_user_id)
+        anomaly_detector.delete_all_anomalies_for_user(current_user_id)
         
         # Bulk ingest the parsed records
         success, ingest_result = cost_service.bulk_ingest_costs(current_user_id, records)
         
         if not success:
             return jsonify({'error': ingest_result.get('error', 'Failed to ingest records')}), 400
+            
+        # Run anomaly detection on the new data
+        print(f"DEBUG: Running anomaly detection for user {current_user_id}")
+        anomaly_detector.run_anomaly_detection(current_user_id)
         
         # Determine status code
         if ingest_result['error_count'] == 0:

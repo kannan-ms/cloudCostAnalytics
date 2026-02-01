@@ -27,7 +27,7 @@ def create_app(config=Config):
     if Database.initialize():
         create_indexes()
     else:
-        print("❌ Failed to connect to MongoDB Atlas")
+        print(" Failed to connect to MongoDB Atlas")
         print("Please check your MONGODB_URI in .env file")
     
     # Enable CORS (include both /api/* and upload endpoint)
@@ -180,11 +180,7 @@ if __name__ == '__main__':
     
     app = create_app()
     
-    print("\n" + "="*60)
-    print("🚀 Server starting on http://localhost:5000")
-    #print("="*60)
-    #print("Press CTRL+C to stop the server")
-    #print("="*60 + "\n")
+    print(" Server starting on http://localhost:5000")
     
     try:
         app.run(
@@ -195,8 +191,8 @@ if __name__ == '__main__':
             threaded=True
         )
     except KeyboardInterrupt:
-        print("\n\n✅ Server stopped")
+        print("\n\n Server stopped")
     except Exception as e:
-        print(f"\n❌ Server error: {e}")
+        print(f"\n Server error: {e}")
     finally:
         Database.close()

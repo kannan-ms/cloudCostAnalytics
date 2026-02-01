@@ -17,6 +17,19 @@ VALID_PROVIDERS = ['AWS', 'Azure', 'GCP', 'Other']
 VALID_CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'JPY', 'CNY']
 
 
+def delete_all_costs_for_user(user_id: str) -> bool:
+    """
+    Delete all cost records for a specific user.
+    """
+    try:
+        costs_collection = get_collection(Collections.CLOUD_COSTS)
+        costs_collection.delete_many({"user_id": ObjectId(user_id)})
+        return True
+    except Exception as e:
+        print(f"Error clearing user costs: {e}")
+        return False
+
+
 def validate_cost_data(data: Dict) -> Tuple[bool, Optional[str]]:
     """
     Validate cost record data.
@@ -76,9 +89,9 @@ def validate_cost_data(data: Dict) -> Tuple[bool, Optional[str]]:
         if start_date > end_date:
             return False, "usage_start_date must be before or equal to usage_end_date"
         
-        # Don't allow future dates
-        if start_date > datetime.utcnow():
-            return False, "usage_start_date cannot be in the future"
+        # future date check removed to allow forecasting/planning data
+        # if start_date > datetime.utcnow():
+        #    return False, "usage_start_date cannot be in the future"
             
     except (ValueError, TypeError) as e:
         return False, f"Invalid date format. Use ISO 8601 format (YYYY-MM-DDTHH:MM:SS): {str(e)}"
@@ -837,13 +850,47 @@ def get_top_resources(
     except Exception as e:
         return False, f"Error getting top resources: {str(e)}"
 
-def get_auto_trends(user_id: str) -> Tuple[bool, any]:
+
+def get_filter_options(user_id: str) -> Tuple[bool, any]:
     """
-    Automatically detect date range from user's data and return trends.
+    Get unique values for filters (services, regions, accounts, providers).
+    """
+    try:
+        costs_collection = get_collection(Collections.CLOUD_COSTS)
+        pipeline = [
+            {"$match": {"user_id": ObjectId(user_id)}},
+            {"$group": {
+                "_id": None,
+                "services": {"$addToSet": "$service_name"},
+                "regions": {"$addToSet": "$region"},
+                "accounts": {"$addToSet": "$cloud_account_id"},
+                "providers": {"$addToSet": "$provider"}
+            }}
+        ]
+        result = list(costs_collection.aggregate(pipeline))
+        if result:
+            data = result[0]
+            # Clean up and sort
+            return True, {
+                "services": sorted([str(x) for x in data.get('services', []) if x]),
+                "regions": sorted([str(x) for x in data.get('regions', []) if x]),
+                "accounts": sorted([str(x) for x in data.get('accounts', []) if x]),
+                "providers": sorted([str(x) for x in data.get('providers', []) if x]),
+            }
+        return True, {"services": [], "regions": [], "accounts": [], "providers": []}
+    except Exception as e:
+        return False, f"Error fetching filter options: {str(e)}"
+
+
+def get_auto_trends(user_id: str, breakdown_by: str = 'service', filters: Dict = None) -> Tuple[bool, any]:
+    """
+    Automatically detect date range and return trends from user's actual data.
     Groups by billing_period if available, otherwise by month from usage_start_date.
     
     Args:
         user_id: User's ID
+        breakdown_by: Field to group by (service, region, account, provider)
+        filters: Dictionary of filters to apply
     
     Returns:
         (success, trends_or_error)
@@ -851,10 +898,33 @@ def get_auto_trends(user_id: str) -> Tuple[bool, any]:
     try:
         costs_collection = get_collection(Collections.CLOUD_COSTS)
         
-        # First, get the date range of the user's data
+        # Determine grouping field
+        field_map = {
+            'service': '$service_name',
+            'region': '$region',
+            'account': '$cloud_account_id',
+            'provider': '$provider'
+        }
+        # Default to service if invalid value provided
+        breakdown_field = field_map.get(breakdown_by, '$service_name')
+
+        # Build initial match stage (User check + filters)
         user_oid = ObjectId(user_id)
+        match_stage = {"user_id": user_oid}
+        
+        if filters:
+            if filters.get('service') and filters['service'] != 'No Filters Applied':
+                match_stage['service_name'] = filters['service']
+            if filters.get('region') and filters['region'] != 'No Filters Applied':
+                match_stage['region'] = filters['region']
+            if filters.get('account') and filters['account'] != 'No Filters Applied':
+                match_stage['cloud_account_id'] = filters['account']
+            if filters.get('provider') and filters['provider'] != 'No Filters Applied':
+                match_stage['provider'] = filters['provider']
+
+        # First, get the date range of the user's data (APPLY FILTERS HERE TOO to ensure relevant range)
         date_range = costs_collection.aggregate([
-            {"$match": {"user_id": user_oid}},
+            {"$match": match_stage},
             {"$group": {
                 "_id": None,
                 "min_date": {"$min": "$usage_start_date"},
@@ -877,27 +947,60 @@ def get_auto_trends(user_id: str) -> Tuple[bool, any]:
         min_date = date_info[0]['min_date']
         max_date = date_info[0]['max_date']
         
-        # Aggregation pipeline - group by billing_period or date
-        pipeline = [
-            {"$match": {"user_id": user_oid}},
-            {"$group": {
-                "_id": {
-                    "$cond": [
-                        {"$ifNull": ["$billing_period", False]},
-                        "$billing_period",
-                        {
-                            "$dateToString": {
-                                "format": "%Y-%m",
-                                "date": "$usage_start_date"
-                            }
+        # Calculate duration in days
+        duration_days = (max_date - min_date).days
+        
+        # Determine grouping strategy based on duration
+        # If less than 60 days, group by DAY. Else group by MONTH.
+        if duration_days <= 60:
+             # Group by Day (%Y-%m-%d)
+             group_id_expression = {
+                "$dateToString": {
+                    "format": "%Y-%m-%d",
+                    "date": "$usage_start_date"
+                }
+             }
+        else:
+             # Group by Month (%Y-%m) (or keep billing_period logic if preferred)
+             group_id_expression = {
+                "$cond": [
+                    {"$ifNull": ["$billing_period", False]},
+                    "$billing_period",
+                    {
+                        "$dateToString": {
+                            "format": "%Y-%m",
+                            "date": "$usage_start_date"
                         }
-                    ]
+                    }
+                ]
+             }
+
+        # Aggregation pipeline - Enhanced to include dynamic breakdown
+        pipeline = [
+            {"$match": match_stage},
+            # First Group: Calculate cost per Item per Time Period
+            {"$group": {
+
+                "_id": {
+                    "period": group_id_expression,
+                    "item": breakdown_field
                 },
-                "total_cost": {"$sum": "$cost"},
-                "record_count": {"$sum": 1},
-                "services": {"$addToSet": "$service_name"},
+                "service_cost": {"$sum": "$cost"},
                 "min_date": {"$min": "$usage_start_date"},
                 "max_date": {"$max": "$usage_end_date"}
+            }},
+            # Second Group: Re-group by Time Period to reconstruct the structure
+            {"$group": {
+                "_id": "$_id.period",
+                "total_cost": {"$sum": "$service_cost"},
+                "breakdown": {
+                    "$push": {
+                        "service_name": "$_id.item",
+                        "cost": "$service_cost"
+                    }
+                },
+                "min_date": {"$min": "$min_date"},
+                "max_date": {"$max": "$max_date"}
             }},
             {"$sort": {"_id": 1}}
         ]
@@ -908,8 +1011,14 @@ def get_auto_trends(user_id: str) -> Tuple[bool, any]:
             {
                 "period": r['_id'],
                 "total_cost": round(r['total_cost'], 2),
-                "record_count": r['record_count'],
-                "unique_services": len(r['services']),
+                "breakdown": sorted(
+                    [{
+                        "service_name": b['service_name'], 
+                        "cost": round(b['cost'], 2)
+                    } for b in r['breakdown']], 
+                    key=lambda x: x['cost'], 
+                    reverse=True
+                ),
                 "date_range": {
                     "start": r['min_date'].strftime('%Y-%m-%d') if r.get('min_date') else None,
                     "end": r['max_date'].strftime('%Y-%m-%d') if r.get('max_date') else None

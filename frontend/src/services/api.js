@@ -31,4 +31,20 @@ api.interceptors.response.use(
   }
 );
 
+
+// Cost endpoints
+api.getDailyTrends = (startDate, endDate) => {
+  const params = {};
+  if (startDate) params.start_date = startDate;
+  if (endDate) params.end_date = endDate;
+  return api.get('/costs/trends/daily', { params });
+};
+
+api.getAutoTrends = () => {
+  return api.get('/costs/trends/auto');
+};
+
+api.getAnomalies = () => api.get('/anomalies'); // Assuming this exists based on context
+api.getCostSummary = () => api.get('/costs/summary');
+
 export default api;

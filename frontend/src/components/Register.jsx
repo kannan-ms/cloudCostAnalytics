@@ -29,7 +29,7 @@ function Register() {
       setError('Name is required');
       return false;
     }
-    
+
     if (formData.name.length < 2) {
       setError('Name must be at least 2 characters');
       return false;
@@ -90,7 +90,7 @@ function Register() {
         formData.password,
         formData.confirmPassword
       );
-      
+
       if (response.token) {
         localStorage.setItem('token', response.token);
         localStorage.setItem('user', JSON.stringify(response.user));
@@ -108,7 +108,7 @@ function Register() {
 
   return (
     <div className="auth-container">
-      <div className="auth-card">
+      <div className="auth-card register-card">
         <div className="auth-header">
           <div className="auth-logo">☁️</div>
           <h1 className="auth-title">Create Account</h1>
@@ -148,7 +148,7 @@ function Register() {
 
           <div className="form-group">
             <label className="form-label">Password</label>
-            <div style={{ position: 'relative', width: '100%' }}>
+            <div className="password-wrapper">
               <input
                 type={showPassword ? "text" : "password"}
                 name="password"
@@ -162,27 +162,8 @@ function Register() {
               />
               <button
                 type="button"
+                className="password-toggle-btn"
                 onClick={() => setShowPassword(!showPassword)}
-                style={{
-                  position: 'absolute',
-                  right: '12px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '0',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#9ca3af',
-                  opacity: '0.6',
-                  transition: 'opacity 0.2s',
-                  height: '20px',
-                  width: '20px'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
                 tabIndex="-1"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
@@ -201,14 +182,14 @@ function Register() {
                 </svg>
               </button>
             </div>
-            <small style={{color: '#64748b', fontSize: '12px', marginTop: '4px', display: 'block'}}>
+            <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px', display: 'block' }}>
               Must be 8+ chars with uppercase, lowercase, number, and special character
             </small>
           </div>
 
           <div className="form-group">
             <label className="form-label">Confirm Password</label>
-            <div style={{ position: 'relative', width: '100%' }}>
+            <div className="password-wrapper">
               <input
                 type={showConfirmPassword ? "text" : "password"}
                 name="confirmPassword"
@@ -222,27 +203,8 @@ function Register() {
               />
               <button
                 type="button"
+                className="password-toggle-btn"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                style={{
-                  position: 'absolute',
-                  right: '12px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '0',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#9ca3af',
-                  opacity: '0.6',
-                  transition: 'opacity 0.2s',
-                  height: '20px',
-                  width: '20px'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
                 tabIndex="-1"
                 aria-label={showConfirmPassword ? "Hide password" : "Show password"}
               >
@@ -263,8 +225,8 @@ function Register() {
             </div>
           </div>
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             className="auth-button"
             disabled={loading}
           >

@@ -10,6 +10,19 @@ from database import get_collection, Collections
 from models import Anomaly
 
 
+def delete_all_anomalies_for_user(user_id: str) -> bool:
+    """
+    Delete all anomalies for a specific user.
+    """
+    try:
+        anomalies_collection = get_collection(Collections.ANOMALIES)
+        anomalies_collection.delete_many({"user_id": ObjectId(user_id)})
+        return True
+    except Exception as e:
+        print(f"Error clearing user anomalies: {e}")
+        return False
+
+
 def calculate_service_average(user_id: str, service_name: str, days: int = 30) -> float:
     """
     Calculate average cost for a service over the last N days.

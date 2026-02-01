@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import '../styles/FileUpload.css';
 
 const FileUpload = ({ onUploadSuccess, onSwitchToOverview }) => {
@@ -8,6 +8,8 @@ const FileUpload = ({ onUploadSuccess, onSwitchToOverview }) => {
   const [uploadResult, setUploadResult] = useState(null);
   const [error, setError] = useState(null);
   const [dragActive, setDragActive] = useState(false);
+
+  // ... (keeping existing event handlers)
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -23,7 +25,7 @@ const FileUpload = ({ onUploadSuccess, onSwitchToOverview }) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFileSelect(e.dataTransfer.files[0]);
     }
@@ -35,16 +37,16 @@ const FileUpload = ({ onUploadSuccess, onSwitchToOverview }) => {
       'application/vnd.ms-excel',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     ];
-    
+
     const validExtensions = ['.csv', '.xls', '.xlsx'];
     const fileExtension = selectedFile.name.toLowerCase().substring(selectedFile.name.lastIndexOf('.'));
-    
+
     if (!validExtensions.includes(fileExtension)) {
       setError('Please upload a CSV or Excel file (.csv, .xlsx, .xls)');
       setFile(null);
       return;
     }
-    
+
     setFile(selectedFile);
     setError(null);
     setUploadResult(null);
@@ -70,20 +72,19 @@ const FileUpload = ({ onUploadSuccess, onSwitchToOverview }) => {
     formData.append('file', file);
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.post('http://localhost:5000/upload-cost-data', formData, {
+      // Use the api instance (handles base URL and Auth headers automatically)
+      const response = await api.post('/costs/upload', formData, {
         headers: {
-          'Authorization': token ? `Bearer ${token}` : undefined,
           'Content-Type': 'multipart/form-data'
         }
       });
 
       console.log('Upload successful:', response.data);
       setUploadResult(response.data);
-      
+
       // Don't clear the file immediately - keep it visible with success message
       // setFile(null);
-      
+
       // Call parent callback to refresh data
       if (onUploadSuccess) {
         console.log('Calling onUploadSuccess to refresh dashboard...');
@@ -119,7 +120,7 @@ const FileUpload = ({ onUploadSuccess, onSwitchToOverview }) => {
         </button>
       </div>
 
-      <div 
+      <div
         className={`file-drop-zone ${dragActive ? 'drag-active' : ''} ${file ? 'has-file' : ''}`}
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
@@ -206,7 +207,7 @@ const FileUpload = ({ onUploadSuccess, onSwitchToOverview }) => {
             💡 <strong>Tip:</strong> Go to the "Overview" or "Cost Trends" tab to see your uploaded data visualized!
           </div>
           {onSwitchToOverview && (
-            <button 
+            <button
               onClick={onSwitchToOverview}
               style={{
                 marginTop: '12px',
