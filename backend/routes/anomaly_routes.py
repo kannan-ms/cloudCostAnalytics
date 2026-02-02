@@ -69,7 +69,7 @@ def run_detection(current_user_id):
     }
     """
     try:
-        success, result = anomaly_detector.run_anomaly_detection(current_user_id)
+        success, result = anomaly_detector.run_anomaly_detection_for_user(current_user_id)
         
         if not success:
             return jsonify({'error': result}), 400

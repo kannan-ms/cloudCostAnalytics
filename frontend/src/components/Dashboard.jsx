@@ -2,7 +2,14 @@ import React, { useState, useEffect } from 'react';
 import {
   BarChart2,
   Activity,
-  ChevronDown
+  ChevronDown,
+  PieChart,
+  LineChart,
+  AreaChart,
+  TrendingUp,
+  Calendar,
+  Layers,
+  Loader2
 } from 'lucide-react';
 import CostChart from './CostChart';
 import FilterBar from './FilterBar';
@@ -11,7 +18,7 @@ import EmptyState from './EmptyState';
 import FileUpload from './FileUpload';
 import api from '../services/api';
 
-const Dashboard = ({ showUpload, setShowUpload }) => {
+const Dashboard = ({ showUpload, setShowUpload, globalFilters = {} }) => {
   const [costs, setCosts] = useState({ trends: [], summary: {} });
   const [anomalies, setAnomalies] = useState({ anomalies: [] });
   const [loading, setLoading] = useState(true);
@@ -22,52 +29,44 @@ const Dashboard = ({ showUpload, setShowUpload }) => {
   const [isBreakdownOpen, setIsBreakdownOpen] = useState(false);
   const [filters, setFilters] = useState({});
 
-  const chartTypes = ['bar', 'line', 'area', 'doughnut', 'pie'];
-  const breakdownOptions = ['service', 'region', 'account', 'provider'];
+  const chartTypes = [
+      { id: 'bar', label: 'Bar', icon: BarChart2 },
+      { id: 'line', label: 'Line', icon: LineChart },
+      { id: 'area', label: 'Area', icon: AreaChart },
+  ];
+  
+  const breakdownOptions = [
+      { id: 'service', label: 'Service' },
+      { id: 'region', label: 'Region' },
+      { id: 'account', label: 'Account' },
+      { id: 'provider', label: 'Provider' },
+  ];
 
-  const toggleChartType = () => {
-    const nextIndex = (chartTypes.indexOf(chartType) + 1) % chartTypes.length;
-    setChartType(chartTypes[nextIndex]);
-  };
-
-  const handleBreakdownSelect = (option) => {
-    setBreakdownBy(option);
+  const handleBreakdownSelect = (optionId) => {
+    setBreakdownBy(optionId);
     setIsBreakdownOpen(false);
   };
 
-  // New refresh logic using Auto Trends
   const refreshData = async () => {
     setLoading(true);
-    // Clear previous state specifically to avoid stale data visual
     setCosts({ trends: [], summary: {} });
     setAnomalies({ anomalies: [] });
     
     try {
-      // 1. Get Auto Trends (detects date range automatically)
       const timestamp = new Date().getTime();
+      const allFilters = { ...globalFilters, ...filters };
       const queryParams = new URLSearchParams({
           _t: timestamp,
           breakdown: breakdownBy,
-          ...filters
+          ...allFilters
       });
       const trendRes = await api.get(`/costs/trends/auto?${queryParams}`);
-
-      // 2. Get Anomalies
       const anomalyRes = await api.get(`/anomalies?_t=${timestamp}`);
 
-      // Check if we have data
       if (trendRes.data && trendRes.data.summary && trendRes.data.summary.total_cost > 0) {
-
-        // Transform AutoTrends data to match what CostChart expects if needed
-        // CostChart typically expects { trends: [{_id/date, total_cost}] }
-        // AutoTrends returns { trends: [{period, total_cost}] }
-        // Let's map 'period' to 'date' for consistency if necessary, 
-        // or ensure CostChart handles both.
-
         const trends = trendRes.data.trends.map(t => ({
           ...t,
-          date: t.period, // Map period to date for chart labels
-          // If 'date' was expected by chart logic
+          date: t.period,
         }));
 
         setCosts({
@@ -82,7 +81,6 @@ const Dashboard = ({ showUpload, setShowUpload }) => {
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
-      // Fallback for empty state or error
       setHasData(false);
     } finally {
       setLoading(false);
@@ -92,329 +90,204 @@ const Dashboard = ({ showUpload, setShowUpload }) => {
 
   useEffect(() => {
     refreshData();
-  }, [breakdownBy, filters]);
+  }, [breakdownBy, filters, globalFilters]);
 
-  // ... (rest of render logic)
+  // --- Render Helpers ---
+
   if (showUpload) {
     return (
-      <div className="upload-modal-overlay">
-        <div className="upload-modal">
-          <button className="close-modal" onClick={() => setShowUpload(false)}>×</button>
-          <FileUpload onUploadSuccess={refreshData} onSwitchToOverview={refreshData} />
+      <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-[1000] p-4">
+        <div className="bg-white rounded-xl w-full max-w-2xl relative shadow-2xl border border-slate-100 overflow-hidden">
+             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <h3 className="font-semibold text-slate-800">Upload Cost Data</h3>
+                <button
+                    className="p-1 rounded-full hover:bg-slate-200 text-slate-500 transition-colors"
+                    onClick={() => setShowUpload(false)}
+                >
+                    <ChevronDown className="rotate-45" size={20} />
+                </button>
+            </div>
+            <div className="p-6">
+                 <FileUpload onUploadSuccess={refreshData} onSwitchToOverview={refreshData} />
+            </div>
         </div>
-        <style>{`
-          .upload-modal-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(11, 17, 54, 0.8);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-          }
-          .upload-modal {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            width: 100%;
-            max-width: 600px;
-            position: relative;
-          }
-          .close-modal {
-            position: absolute;
-            top: 10px;
-            right: 15px;
-            background: none;
-            border: none;
-            font-size: 24px;
-            cursor: pointer;
-            color: var(--text-light);
-          }
-        `}</style>
       </div>
     );
   }
 
   if (loading) {
-    return <div className="loading-state">Loading actual insights...</div>;
+    return (
+      <div className="flex flex-col items-center justify-center h-96 text-slate-400 gap-4">
+        <Loader2 size={40} className="animate-spin text-blue-500" />
+        <p className="font-medium text-slate-500">Analyzing cost patterns...</p>
+      </div>
+    );
   }
 
   if (!hasData) {
     return <EmptyState onUploadClick={() => setShowUpload(true)} />;
   }
 
-  const TabButton = ({ id, icon: Icon, label }) => (
-    <button
-      className={`tab-btn ${activeTab === id ? 'active' : ''}`}
-      onClick={() => setActiveTab(id)}
-    >
-      <Icon size={16} />
-      {label}
-    </button>
-  );
-
   return (
-    <div className="dashboard-container">
-      <div className="dashboard-tabs">
-        <TabButton id="cost_timeline" icon={BarChart2} label="Cost Timeline" />
-        <TabButton id="anomaly_monitor" icon={Activity} label="Anomaly Monitor" />
+    <div className="max-w-[1600px] mx-auto p-8 space-y-8">
+      
+      {/* Top Header & Controls */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+         <div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Cost Overview</h1>
+            <p className="text-slate-500 mt-1">Track spend, detect anomalies, and forecast trends.</p>
+         </div>
+
+         <div className="flex items-center gap-3 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
+             <button
+                onClick={() => setActiveTab('cost_timeline')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    activeTab === 'cost_timeline' 
+                    ? 'bg-blue-50 text-blue-700 shadow-sm ring-1 ring-blue-200' 
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+             >
+                <BarChart2 size={16} />
+                Cost Timeline
+             </button>
+             <button
+                onClick={() => setActiveTab('anomaly_monitor')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    activeTab === 'anomaly_monitor' 
+                    ? 'bg-blue-50 text-blue-700 shadow-sm ring-1 ring-blue-200' 
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+             >
+                <Activity size={16} />
+                Anomalies
+             </button>
+         </div>
       </div>
 
       <FilterBar filters={filters} onFilterChange={setFilters} />
 
-      <div className="content-toolbar">
-        <div className="left-tools">
-          <button className="tool-btn active" onClick={toggleChartType} style={{ minWidth: '130px' }}>
-            <BarChart2 size={16} /> 
-            {chartType === 'bar' && 'Stacked Bar'}
-            {chartType === 'line' && 'Line Chart'}
-            {chartType === 'area' && 'Area Chart'}
-            {chartType === 'doughnut' && 'Doughnut'}
-            {chartType === 'pie' && 'Pie Chart'}
-          </button>
-          <div className="currency-toggle ml-4">
-            <button className="currency-btn active">$ USD</button>
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow group">
+          <div className="flex items-center justify-between mb-4">
+             <div className="p-2 bg-green-50 text-green-600 rounded-lg group-hover:bg-green-100 transition-colors">
+                <TrendingUp size={20} />
+             </div>
+             <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-full">+2.4%</span>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-slate-500 mb-1">Total Spend</p>
+            <h3 className="text-3xl font-bold text-slate-900">
+              ${costs.summary?.total_cost?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+            </h3>
           </div>
         </div>
-        <div className="right-tools">
-          <div className="breakdown-container" style={{ position: 'relative' }}>
-            <div 
-              className="breakdown-select" 
-              onClick={() => setIsBreakdownOpen(!isBreakdownOpen)} 
-              style={{ cursor: 'pointer' }}
-            >
-              <span className="label">Breakdown By:</span>
-              <div className="select-box">
-                {breakdownBy === 'account' ? 'Cloud Account' : breakdownBy.charAt(0).toUpperCase() + breakdownBy.slice(1)}
-                <ChevronDown size={14} />
-              </div>
-            </div>
-            
-            {isBreakdownOpen && (
-              <div className="breakdown-menu">
-                {breakdownOptions.map(option => (
-                  <div 
-                    key={option} 
-                    className={`breakdown-item ${breakdownBy === option ? 'selected' : ''}`}
-                    onClick={() => handleBreakdownSelect(option)}
-                  >
-                    {option === 'account' ? 'Cloud Account' : option.charAt(0).toUpperCase() + option.slice(1)}
-                  </div>
-                ))}
-              </div>
-            )}
+
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow group">
+           <div className="flex items-center justify-between mb-4">
+             <div className="p-2 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-100 transition-colors">
+                <Calendar size={20} />
+             </div>
+          </div>
+           <div>
+            <p className="text-sm font-medium text-slate-500 mb-1">Date Range</p>
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                {costs.summary?.date_range?.start ? new Date(costs.summary?.date_range?.start).toLocaleDateString() : '-'} 
+                <span className="text-slate-300">→</span>
+                {costs.summary?.date_range?.end ? new Date(costs.summary.date_range.end).toLocaleDateString() : '-'}
+            </h3>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow group">
+          <div className="flex items-center justify-between mb-4">
+             <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg group-hover:bg-indigo-100 transition-colors">
+                <Layers size={20} />
+             </div>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-slate-500 mb-1">Data Points Used</p>
+            <h3 className="text-3xl font-bold text-slate-900">
+                {costs.summary?.periods_count || 0}
+            </h3>
           </div>
         </div>
       </div>
 
-      <div className="summary-cards">
-        <div className="summary-card">
-          <div className="card-label">Total Spend</div>
-          <div className="card-value">${costs.summary?.total_cost?.toFixed(2) || '0.00'}</div>
-        </div>
-        <div className="summary-card">
-          <div className="card-label">Range</div>
-          <div className="card-value" style={{ fontSize: '14px' }}>
-            {costs.summary?.date_range?.start} to {costs.summary?.date_range?.end}
-          </div>
-        </div>
-        <div className="summary-card">
-          <div className="card-label">Data Points</div>
-          <div className="card-value">{costs.summary?.periods_count || 0}</div>
-        </div>
-      </div>
-
-      <div className="chart-card">
+      {/* Main Content Area */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 min-h-[500px]">
+        
+        {/* Chart Header Controls */}
         {activeTab === 'cost_timeline' && (
-          <div className="chart-wrapper">
-            <CostChart costs={costs} chartType={chartType} />
-          </div>
+             <div className="flex flex-wrap items-center justify-between mb-6 gap-4">
+                <h3 className="text-lg font-bold text-slate-800">
+                    Cost Trends <span className="text-slate-400 font-normal">by {breakdownBy}</span>
+                </h3>
+                
+                <div className="flex items-center gap-3">
+                     {/* Breakdown Dropdown */}
+                    <div className="relative">
+                        <button
+                            className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all focus:outline-none focus:ring-2 focus:ring-blue-100"
+                            onClick={() => setIsBreakdownOpen(!isBreakdownOpen)}
+                        >
+                            <span className="text-slate-400">Group by:</span>
+                            <span className="text-slate-900">{breakdownOptions.find(o => o.id === breakdownBy)?.label}</span>
+                            <ChevronDown size={14} className={`text-slate-400 transition-transform ${isBreakdownOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        
+                        {isBreakdownOpen && (
+                            <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-slate-200 rounded-lg shadow-xl z-10 py-1 animate-in fade-in zoom-in-95 duration-100">
+                                {breakdownOptions.map(option => (
+                                    <button
+                                        key={option.id}
+                                        className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                                            breakdownBy === option.id
+                                            ? 'bg-blue-50 text-blue-700 font-medium'
+                                            : 'text-slate-600 hover:bg-slate-50'
+                                        }`}
+                                        onClick={() => handleBreakdownSelect(option.id)}
+                                    >
+                                        {option.label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="h-6 w-px bg-slate-200" />
+
+                    {/* Chart Type Toggle */}
+                    <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                        {chartTypes.map(type => (
+                             <button
+                                key={type.id}
+                                onClick={() => setChartType(type.id)}
+                                className={`p-1.5 rounded-md transition-all ${
+                                    chartType === type.id
+                                    ? 'bg-white text-blue-600 shadow-sm ring-1 ring-black/5'
+                                    : 'text-slate-400 hover:text-slate-600'
+                                }`}
+                                title={type.label}
+                             >
+                                <type.icon size={16} />
+                             </button>
+                        ))}
+                    </div>
+                </div>
+             </div>
         )}
-        {activeTab === 'anomaly_monitor' && <AnomalyList anomalies={anomalies?.anomalies || []} />}
+
+        {/* Content */}
+        <div className="h-[400px] w-full">
+            {activeTab === 'cost_timeline' && (
+            <CostChart costs={costs} chartType={chartType} />
+            )}
+            {activeTab === 'anomaly_monitor' && (
+            <AnomalyList anomalies={anomalies?.anomalies || []} />
+            )}
+        </div>
       </div>
-
-      <style>{`
-        .dashboard-container {
-          max-width: 1400px;
-          margin: 0 auto;
-        }
-
-        .dashboard-tabs {
-          display: flex;
-          gap: 4px;
-          margin-bottom: 20px;
-        }
-
-        .tab-btn {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 8px 16px;
-          background: white;
-          border: 1px solid var(--border-light);
-          border-radius: 4px;
-          color: var(--text-medium);
-          font-weight: 600;
-          font-size: 13px;
-        }
-
-        .tab-btn.active {
-          color: var(--primary-blue);
-          border-color: var(--border-light);
-          background: white;
-          box-shadow: 0 2px 0 0 var(--primary-blue);
-        }
-
-        .content-toolbar {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 16px;
-        }
-
-        .left-tools, .right-tools {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .tool-btn {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          padding: 6px 12px;
-          background: white;
-          border: 1px solid var(--border-light);
-          border-radius: 4px;
-          font-weight: 600;
-          font-size: 12px;
-          color: var(--text-dark);
-        }
-
-        .tool-btn.active {
-          background: var(--text-dark);
-          color: white;
-          border-color: var(--text-dark);
-        }
-
-        .currency-toggle {
-          display: flex;
-          border: 1px solid var(--border-light);
-          border-radius: 4px;
-          overflow: hidden;
-        }
-
-        .currency-btn {
-          padding: 6px 12px;
-          background: white;
-          border: none;
-          font-size: 12px;
-          font-weight: 600;
-          color: var(--text-medium);
-        }
-
-        .currency-btn.active {
-          background: var(--text-dark);
-          color: white;
-        }
-
-        .ml-4 { margin-left: 16px; }
-
-        .breakdown-select {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          background: white;
-          border: 1px solid var(--border-light);
-          padding: 4px 12px;
-          border-radius: 4px;
-        }
-
-        .breakdown-menu {
-          position: absolute;
-          top: 100%;
-          right: 0;
-          margin-top: 4px;
-          background: white;
-          border: 1px solid var(--border-light);
-          border-radius: 4px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-          z-index: 100;
-          min-width: 180px;
-          overflow: hidden;
-        }
-
-        .breakdown-item {
-          padding: 8px 16px;
-          font-size: 13px;
-          color: var(--text-dark);
-          cursor: pointer;
-          transition: background 0.1s;
-        }
-
-        .breakdown-item:hover {
-          background-color: #f8fafc;
-        }
-
-        .breakdown-item.selected {
-          background-color: #f0f4ff;
-          color: var(--primary-blue);
-          font-weight: 600;
-        }
-
-        .summary-cards {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 20px;
-          margin-bottom: 20px;
-        }
-
-        .summary-card {
-           background: white;
-           padding: 16px;
-           border: 1px solid var(--border-light);
-           border-radius: 4px;
-           box-shadow: var(--shadow-sm);
-        }
-
-        .card-label {
-          font-size: 11px;
-          text-transform: uppercase;
-          color: var(--text-light);
-          font-weight: 700;
-          margin-bottom: 8px;
-        }
-
-        .card-value {
-          font-size: 24px;
-          font-weight: 600;
-          color: var(--text-dark);
-        }
-
-        .chart-card {
-          background: white;
-          border: 1px solid var(--border-light);
-          border-radius: 4px;
-          padding: 20px;
-          height: 400px;
-          margin-bottom: 24px;
-          box-shadow: var(--shadow-sm);
-        }
-
-        .chart-wrapper {
-          height: 100%;
-          width: 100%;
-        }
-
-        .loading-state {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          height: 100vh;
-          color: var(--primary-blue);
-          font-weight: 600;
-        }
-      `}</style>
     </div>
   );
 };

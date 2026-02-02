@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, AlertCircle, CheckCircle } from 'lucide-react';
+import { DollarSign, AlertCircle, CheckCircle, Plus } from 'lucide-react';
 import api from '../services/api';
 
 const Budgets = () => {
@@ -12,7 +12,6 @@ const Budgets = () => {
             try {
                 const res = await api.getCostSummary();
                 if (res.data && res.data.groups) {
-                    // Calculate current month total if possible, or just use grand total for demo
                     setTotalCost(res.data.grand_total || 0);
                 }
             } catch (e) {
@@ -28,113 +27,62 @@ const Budgets = () => {
     const isOverBudget = totalCost > budget;
 
     return (
-        <div className="budgets-container">
-            <h2 className="page-title">Budget Management</h2>
-
-            <div className="budget-card main-budget">
-                <div className="budget-header">
-                    <div>
-                        <h3>Monthly Cloud Budget</h3>
-                        <p className="subtitle">Global AWS & Azure Infrastructure</p>
-                    </div>
-                    <div className="budget-status">
-                        {isOverBudget ? (
-                            <span className="status-badge error"><AlertCircle size={14} /> Over Budget</span>
-                        ) : (
-                            <span className="status-badge success"><CheckCircle size={14} /> On Track</span>
-                        )}
-                    </div>
+        <div className="p-8 max-w-7xl mx-auto">
+             <div className="flex justify-between items-center mb-8">
+                <div>
+                     <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Budget Management</h2>
+                     <p className="text-slate-500 mt-1">Monitor your spending limits and alerts.</p>
                 </div>
+                <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm">
+                    <Plus size={16} />
+                    Create Budget
+                </button>
+            </div>
 
-                <div className="progress-section">
-                    <div className="progress-labels">
-                        <span>${totalCost.toLocaleString()} spent</span>
-                        <span>${budget.toLocaleString()} limit</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Main Budget Card */}
+                <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+                    <div className="flex justify-between items-start mb-6">
+                        <div>
+                            <h3 className="text-lg font-bold text-slate-900">Monthly Cloud Budget</h3>
+                            <p className="text-sm text-slate-500 mt-1">Global AWS & Azure Infrastructure</p>
+                        </div>
+                        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+                            isOverBudget ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+                        }`}>
+                            {isOverBudget ? <AlertCircle size={14} /> : <CheckCircle size={14} />}
+                            {isOverBudget ? 'Over Budget' : 'On Track'}
+                        </div>
                     </div>
-                    <div className="progress-bar-bg">
+
+                    <div className="mb-2 flex justify-between text-sm font-medium">
+                        <span className="text-slate-900">${totalCost.toLocaleString()} <span className="text-slate-500 font-normal">spent</span></span>
+                        <span className="text-slate-500">${budget.toLocaleString()} <span className="font-normal">limit</span></span>
+                    </div>
+                    
+                    <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden mb-4">
                         <div
-                            className={`progress-bar-fill ${isOverBudget ? 'danger' : 'safe'}`}
+                            className={`h-full rounded-full transition-all duration-500 ${isOverBudget ? 'bg-red-500' : 'bg-blue-500'}`}
                             style={{ width: `${percentage}%` }}
                         />
                     </div>
-                    <p className="forecast-text">
-                        At this rate, you are projected to reach <strong>${(totalCost * 1.1).toLocaleString()}</strong> by end of month.
+                    
+                    <p className="text-sm text-slate-500">
+                        At this rate, you are projected to reach <strong className="text-slate-900">${(totalCost * 1.1).toLocaleString()}</strong> by end of month.
                     </p>
                 </div>
-            </div>
 
-            <style>{`
-        .budgets-container {
-          padding: 24px;
-          max-width: 1200px;
-        }
-        .page-title {
-          font-size: 24px;
-          color: var(--text-dark);
-          margin-bottom: 24px;
-        }
-        .budget-card {
-          background: white;
-          border: 1px solid var(--border-light);
-          border-radius: 8px;
-          padding: 24px;
-          box-shadow: var(--shadow-sm);
-        }
-        .budget-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 24px;
-        }
-        .subtitle {
-          color: var(--text-light);
-          font-size: 14px;
-          margin-top: 4px;
-        }
-        .status-badge {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          padding: 6px 12px;
-          border-radius: 20px;
-          font-size: 12px;
-          font-weight: 600;
-        }
-        .status-badge.success { background: #e8f5e9; color: #2e7d32; }
-        .status-badge.error { background: #ffebee; color: #c62828; }
-        
-        .progress-section {
-          max-width: 600px;
-        }
-        .progress-labels {
-          display: flex;
-          justify-content: space-between;
-          font-size: 14px;
-          font-weight: 600;
-          margin-bottom: 8px;
-          color: var(--text-dark);
-        }
-        .progress-bar-bg {
-          height: 12px;
-          background: #f1f3f5;
-          border-radius: 6px;
-          overflow: hidden;
-          margin-bottom: 12px;
-        }
-        .progress-bar-fill {
-          height: 100%;
-          background: var(--primary-blue);
-          border-radius: 6px;
-          transition: width 1s ease;
-        }
-        .progress-bar-fill.danger { background: #ef5350; }
-        .progress-bar-fill.safe { background: #66bb6a; }
-        
-        .forecast-text {
-          font-size: 13px;
-          color: var(--text-light);
-        }
-      `}</style>
+                {/* Placeholder for secondary budget */}
+                <div className="bg-white rounded-xl border border-dashed border-slate-300 p-6 flex flex-col items-center justify-center text-center gap-4 hover:bg-slate-50 transition-colors cursor-pointer group">
+                     <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center group-hover:bg-white border border-slate-200 group-hover:border-blue-200 group-hover:shadow-sm transition-all">
+                        <Plus size={24} className="text-slate-400 group-hover:text-blue-500" />
+                     </div>
+                     <div>
+                        <h3 className="font-semibold text-slate-900">Add Department Budget</h3>
+                        <p className="text-sm text-slate-500 mt-1">Set granular limits for specific teams.</p>
+                     </div>
+                </div>
+            </div>
         </div>
     );
 };

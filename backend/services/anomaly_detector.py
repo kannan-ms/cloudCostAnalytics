@@ -334,7 +334,7 @@ def generate_continuous_increase_recommendation(service: str, increase_pct: floa
     return f"{service} costs have been increasing continuously ({increase_pct:.1f}%). Investigate usage patterns, check for resource scaling issues, and consider cost optimization strategies."
 
 
-def run_anomaly_detection(user_id: str) -> Tuple[bool, any]:
+def run_anomaly_detection_for_user(user_id: str) -> Tuple[bool, any]:
     """
     Run all anomaly detection rules and store results.
     
@@ -492,3 +492,6 @@ def update_anomaly_status(
         
     except Exception as e:
         return False, f"Error updating anomaly: {str(e)}"
+
+# Alias for backward compatibility or external calls expecting this name
+run_anomaly_detection = run_anomaly_detection_for_user

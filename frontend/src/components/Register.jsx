@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import '../styles/Auth.css';
 import { register } from '../services/authService';
+import { Eye, EyeOff, LayoutDashboard, Check, ArrowRight } from 'lucide-react';
 
 function Register() {
   const [formData, setFormData] = useState({
@@ -13,7 +13,6 @@ function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -25,60 +24,22 @@ function Register() {
   };
 
   const validateForm = () => {
-    if (!formData.name.trim()) {
-      setError('Name is required');
-      return false;
-    }
-
-    if (formData.name.length < 2) {
-      setError('Name must be at least 2 characters');
-      return false;
-    }
-
-    if (!formData.email.includes('@')) {
-      setError('Please enter a valid email');
-      return false;
-    }
-
-    if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters');
-      return false;
-    }
-
-    if (!/[A-Z]/.test(formData.password)) {
-      setError('Password must contain at least one uppercase letter');
-      return false;
-    }
-
-    if (!/[a-z]/.test(formData.password)) {
-      setError('Password must contain at least one lowercase letter');
-      return false;
-    }
-
-    if (!/\d/.test(formData.password)) {
-      setError('Password must contain at least one number');
-      return false;
-    }
-
-    if (!/[!@#$%^&*(),.?":{}|<>\-_+=\[\];~/\\]/.test(formData.password)) {
-      setError('Password must contain at least one special character');
-      return false;
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      return false;
-    }
-
-    return true;
+    if (!formData.name.trim()) return 'Name is required';
+    if (formData.name.length < 2) return 'Name must be at least 2 characters';
+    if (!formData.email.includes('@')) return 'Please enter a valid email';
+    if (formData.password.length < 8) return 'Password must be at least 8 characters';
+    if (formData.password !== formData.confirmPassword) return 'Passwords do not match';
+    return null;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-
-    if (!validateForm()) {
-      return;
+    
+    const validationError = validateForm();
+    if (validationError) {
+        setError(validationError);
+        return;
     }
 
     setLoading(true);
@@ -97,147 +58,199 @@ function Register() {
         navigate('/dashboard');
       }
     } catch (err) {
-      console.error('Registration error:', err);
-      console.error('Error response:', err.response?.data);
-      const errorMessage = err.response?.data?.error || err.message || 'Registration failed. Please try again.';
-      setError(errorMessage);
+       setError(err.response?.data?.error || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="auth-container">
-      <div className="auth-card register-card">
-        <div className="auth-header">
-          <div className="auth-logo">☁️</div>
-          <h1 className="auth-title">Create Account</h1>
-          <p className="auth-subtitle">Start analyzing your cloud costs today</p>
+    <div className="flex min-h-screen bg-slate-50">
+      {/* Right Section - Visual (Swapped for Register to differentiate) */}
+       <div className="hidden lg:flex flex-1 relative bg-primary-blue overflow-hidden order-last">
+        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1558494949-ef526b00d071?ixlib=rb-4.0.3&auto=format&fit=crop&w=1568&q=80')] bg-cover bg-center" />
+        <div className="absolute inset-0 bg-gradient-to-bl from-blue-900/95 to-slate-900/95" />
+        
+        <div className="absolute -top-24 -right-24 w-96 h-96 bg-blue-500 rounded-full blur-3xl opacity-20" />
+        <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-indigo-500 rounded-full blur-3xl opacity-20" />
+        
+        <div className="relative z-10 flex flex-col justify-center h-full px-16 text-white">
+            <h2 className="text-3xl font-bold mb-8 leading-tight">Get full visibility into your infrastructure costs.</h2>
+            
+            <div className="grid grid-cols-2 gap-6 bg-white/10 backdrop-blur-sm p-8 rounded-2xl border border-white/10 shadow-xl">
+                <div className="space-y-2">
+                   <div className="text-2xl font-bold text-white tracking-tight">Multi-Cloud</div>
+                   <div className="text-blue-200 text-sm font-medium">Unified Dashboard</div>
+                   <p className="text-xs text-blue-300/80 leading-relaxed">Connect your cloud accounts to view expenses in one place.</p>
+                </div>
+                 <div className="space-y-2 border-l border-white/10 pl-6">
+                   <div className="text-2xl font-bold text-white tracking-tight">Secure</div>
+                   <div className="text-blue-200 text-sm font-medium">Data Protection</div>
+                   <p className="text-xs text-blue-300/80 leading-relaxed">Your read-only credentials are encrypted and stored safely.</p>
+                </div>
+            </div>
         </div>
+      </div>
 
-        {error && <div className="error-message">{error}</div>}
 
-        <form className="auth-form" onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label">Full Name</label>
-            <input
-              type="text"
-              name="name"
-              className="form-input"
-              placeholder="Your name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-              autoComplete="name"
-            />
+      {/* Left Section - Form */}
+      <div className="flex-1 flex flex-col justify-center px-4 sm:px-6 lg:px-20 xl:px-24 bg-white">
+        <div className="mx-auto w-full max-w-sm lg:w-[28rem]"> {/* Slightly wider for register form */}
+          <div className="mb-10">
+             <div className="flex items-center gap-2 text-primary-blue font-bold text-2xl mb-8">
+               <div className="p-2 bg-blue-50 rounded-lg">
+                 <LayoutDashboard className="w-6 h-6 text-primary-blue" />
+               </div>
+               <span>CloudInsight</span>
+             </div>
+            <h2 className="text-3xl font-bold tracking-tight text-slate-900">
+              Create your account
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Get started with your free 30-day trial. No credit card required.
+            </p>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Email Address</label>
-            <input
-              type="email"
-              name="email"
-              className="form-input"
-              placeholder="Your email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              autoComplete="email"
-            />
-          </div>
+          {error && (
+            <div className="mb-6 p-4 rounded-md bg-red-50 border border-red-200">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm font-medium text-red-800">{error}</p>
+                </div>
+              </div>
+            </div>
+          )}
 
-          <div className="form-group">
-            <label className="form-label">Password</label>
-            <div className="password-wrapper">
-              <input
-                type={showPassword ? "text" : "password"}
-                name="password"
-                className="form-input"
-                style={{ width: '100%', paddingRight: '45px', boxSizing: 'border-box' }}
-                placeholder="Create a strong password"
-                value={formData.password}
-                onChange={handleChange}
-                required
-                autoComplete="new-password"
-              />
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium text-slate-700">
+                Full Name
+              </label>
+              <div className="mt-1">
+                <input
+                  id="name"
+                  name="name"
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={handleChange}
+                  className="block w-full rounded-lg border border-slate-300 px-3 py-2 shadow-sm focus:border-primary-blue focus:outline-none focus:ring-1 focus:ring-primary-blue sm:text-sm transition-colors"
+                  placeholder="John Doe"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-slate-700">
+                Email address
+              </label>
+              <div className="mt-1">
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={formData.email}
+                  onChange={handleChange}
+                  className="block w-full rounded-lg border border-slate-300 px-3 py-2 shadow-sm focus:border-primary-blue focus:outline-none focus:ring-1 focus:ring-primary-blue sm:text-sm transition-colors"
+                  placeholder="you@company.com"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <div>
+                <label htmlFor="password" className="block text-sm font-medium text-slate-700">
+                    Password
+                </label>
+                <div className="relative mt-1">
+                    <input
+                    id="password"
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={formData.password}
+                    onChange={handleChange}
+                    className="block w-full rounded-lg border border-slate-300 px-3 py-2 pr-10 shadow-sm focus:border-primary-blue focus:outline-none focus:ring-1 focus:ring-primary-blue sm:text-sm transition-colors"
+                    placeholder="Min 8 chars"
+                    />
+                     <button
+                        type="button"
+                        className="absolute inset-y-0 right-0 flex items-center pr-2 text-slate-400 hover:text-slate-600"
+                        onClick={() => setShowPassword(!showPassword)}
+                        >
+                        {showPassword ? (
+                            <EyeOff className="h-4 w-4" aria-hidden="true" />
+                        ) : (
+                            <Eye className="h-4 w-4" aria-hidden="true" />
+                        )}
+                    </button>
+                </div>
+                </div>
+
+                <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700">
+                    Confirm Password
+                </label>
+                <div className="relative mt-1">
+                    <input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type="password"
+                    required
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                    className="block w-full rounded-lg border border-slate-300 px-3 py-2 shadow-sm focus:border-primary-blue focus:outline-none focus:ring-1 focus:ring-primary-blue sm:text-sm transition-colors"
+                    placeholder="Repeat password"
+                    />
+                </div>
+                </div>
+            </div>
+
+            <div className="flex items-start">
+                  <div className="flex h-5 items-center">
+                    <input
+                      id="terms"
+                      name="terms"
+                      type="checkbox"
+                      required
+                      className="h-4 w-4 rounded border-slate-300 text-primary-blue focus:ring-primary-blue"
+                    />
+                  </div>
+                  <div className="ml-3 text-sm">
+                    <label htmlFor="terms" className="font-medium text-slate-700">
+                      I agree to the <a href="#" className="text-primary-blue hover:text-blue-700">Terms</a> and <a href="#" className="text-primary-blue hover:text-blue-700">Privacy Policy</a>
+                    </label>
+                  </div>
+            </div>
+
+            <div>
               <button
-                type="button"
-                className="password-toggle-btn"
-                onClick={() => setShowPassword(!showPassword)}
-                tabIndex="-1"
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                type="submit"
+                disabled={loading}
+                className="flex w-full justify-center rounded-lg bg-primary-blue px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue transition-all disabled:opacity-70 disabled:cursor-not-allowed items-center gap-2"
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  {showPassword ? (
+                {loading ? 'Creating account...' : (
                     <>
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                      <line x1="1" y1="1" x2="23" y2="23" />
+                    Get Started <ArrowRight className="w-4 h-4" />
                     </>
-                  ) : (
-                    <>
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </>
-                  )}
-                </svg>
+                )}
               </button>
             </div>
-            <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px', display: 'block' }}>
-              Must be 8+ chars with uppercase, lowercase, number, and special character
-            </small>
+          </form>
+
+          <div className="mt-8 text-center text-sm text-slate-600">
+              Already have an account?{' '}
+              <Link to="/login" className="font-semibold text-primary-blue hover:text-blue-700">
+                Sign in
+              </Link>
           </div>
-
-          <div className="form-group">
-            <label className="form-label">Confirm Password</label>
-            <div className="password-wrapper">
-              <input
-                type={showConfirmPassword ? "text" : "password"}
-                name="confirmPassword"
-                className="form-input"
-                style={{ width: '100%', paddingRight: '45px', boxSizing: 'border-box' }}
-                placeholder="Confirm your password"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                required
-                autoComplete="new-password"
-              />
-              <button
-                type="button"
-                className="password-toggle-btn"
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                tabIndex="-1"
-                aria-label={showConfirmPassword ? "Hide password" : "Show password"}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  {showConfirmPassword ? (
-                    <>
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                      <line x1="1" y1="1" x2="23" y2="23" />
-                    </>
-                  ) : (
-                    <>
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </>
-                  )}
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            className="auth-button"
-            disabled={loading}
-          >
-            {loading ? 'Creating Account...' : 'Create Account'}
-          </button>
-        </form>
-
-        <div className="auth-divider">OR</div>
-
-        <div className="auth-link">
-          Already have an account? <Link to="/login">Sign In</Link>
         </div>
       </div>
     </div>

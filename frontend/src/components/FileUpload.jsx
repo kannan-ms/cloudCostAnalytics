@@ -1,6 +1,6 @@
 import { useState } from 'react';
+import { Upload, Download, FileSpreadsheet, X, CheckCircle, AlertTriangle, Lightbulb, File } from 'lucide-react';
 import api from '../services/api';
-import '../styles/FileUpload.css';
 
 const FileUpload = ({ onUploadSuccess, onSwitchToOverview }) => {
   const [file, setFile] = useState(null);
@@ -8,8 +8,6 @@ const FileUpload = ({ onUploadSuccess, onSwitchToOverview }) => {
   const [uploadResult, setUploadResult] = useState(null);
   const [error, setError] = useState(null);
   const [dragActive, setDragActive] = useState(false);
-
-  // ... (keeping existing event handlers)
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -32,12 +30,6 @@ const FileUpload = ({ onUploadSuccess, onSwitchToOverview }) => {
   };
 
   const handleFileSelect = (selectedFile) => {
-    const validTypes = [
-      'text/csv',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    ];
-
     const validExtensions = ['.csv', '.xls', '.xlsx'];
     const fileExtension = selectedFile.name.toLowerCase().substring(selectedFile.name.lastIndexOf('.'));
 
@@ -72,29 +64,18 @@ const FileUpload = ({ onUploadSuccess, onSwitchToOverview }) => {
     formData.append('file', file);
 
     try {
-      // Use the api instance (handles base URL and Auth headers automatically)
-      const response = await api.post('/costs/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
+      // Axios automatically sets the Content-Type to multipart/form-data with the correct boundary
+      // when a FormData object is passed as the body.
+      const response = await api.post('/costs/upload', formData);
 
-      console.log('Upload successful:', response.data);
       setUploadResult(response.data);
 
-      // Don't clear the file immediately - keep it visible with success message
-      // setFile(null);
-
-      // Call parent callback to refresh data
       if (onUploadSuccess) {
-        console.log('Calling onUploadSuccess to refresh dashboard...');
         setTimeout(() => {
           onUploadSuccess();
-        }, 500); // Small delay to ensure state updates
+        }, 500);
       }
     } catch (err) {
-      console.error('Upload error:', err);
-      console.error('Error details:', err.response?.data);
       setError(err.response?.data?.error || 'Failed to upload file. Please try again.');
     } finally {
       setUploading(false);
@@ -112,29 +93,47 @@ const FileUpload = ({ onUploadSuccess, onSwitchToOverview }) => {
   };
 
   return (
-    <div className="file-upload-container">
-      <div className="file-upload-header">
-        <h3>📂 Upload Cost Data</h3>
-        <button onClick={downloadTemplate} className="template-btn">
-          📥 Download Template
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+          <FileSpreadsheet className="text-blue-600" size={20} />
+          Upload Cost Data
+        </h3>
+        <button
+          onClick={downloadTemplate}
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors shadow-sm"
+        >
+          <Download size={16} />
+          Download Template
         </button>
       </div>
 
       <div
-        className={`file-drop-zone ${dragActive ? 'drag-active' : ''} ${file ? 'has-file' : ''}`}
+        className={`border-2 border-dashed rounded-xl p-12 text-center transition-all ${
+          dragActive
+            ? 'border-blue-500 bg-blue-50'
+            : file
+            ? 'border-blue-500 bg-blue-50/10'
+            : 'border-slate-300 bg-slate-50 hover:border-slate-400'
+        }`}
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
         onDragOver={handleDrag}
         onDrop={handleDrop}
       >
         {!file ? (
-          <>
-            <div className="upload-icon">📤</div>
-            <p className="upload-text">
-              Drag & drop your cost file here
+          <div className="flex flex-col items-center">
+            <div className="mb-4 p-4 bg-white rounded-full shadow-sm ring-1 ring-slate-200">
+                <Upload className="text-slate-400" size={32} />
+            </div>
+            <p className="text-slate-900 font-semibold mb-2 text-base">
+              Drag & drop your file here
             </p>
-            <p className="upload-subtext">or</p>
-            <label htmlFor="file-input" className="file-input-label">
+            <p className="text-slate-400 text-sm mb-6">Supported formats: CSV, Excel (.xlsx)</p>
+            <label
+              htmlFor="file-input"
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-slate-900 text-white rounded-lg font-semibold text-sm cursor-pointer hover:bg-slate-800 transition-colors shadow-sm"
+            >
               Browse Files
             </label>
             <input
@@ -142,118 +141,140 @@ const FileUpload = ({ onUploadSuccess, onSwitchToOverview }) => {
               type="file"
               accept=".csv,.xlsx,.xls"
               onChange={handleFileInput}
-              style={{ display: 'none' }}
+              className="hidden"
             />
-            <p className="upload-hint">Supported formats: CSV, Excel (.xlsx, .xls)</p>
-          </>
+          </div>
         ) : (
-          <div className="file-selected">
-            <div className="file-info">
-              <span className="file-icon">📄</span>
-              <div className="file-details">
-                <p className="file-name">{file.name}</p>
-                <p className="file-size">{(file.size / 1024).toFixed(2)} KB</p>
+          <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
+                <FileSpreadsheet size={24} />
+              </div>
+              <div className="text-left">
+                <p className="text-slate-900 font-semibold text-sm truncate max-w-[200px]">{file.name}</p>
+                <p className="text-slate-500 text-xs">{(file.size / 1024).toFixed(2)} KB</p>
               </div>
             </div>
-            <button onClick={handleClear} className="clear-btn" title="Remove file">
-              ✕
+            <button
+              onClick={handleClear}
+              className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+              title="Remove file"
+            >
+              <X size={20} />
             </button>
           </div>
         )}
       </div>
 
       {error && (
-        <div className="upload-message error-message">
-          <span className="message-icon">❌</span>
-          <span>{error}</span>
+        <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-100 rounded-xl text-red-700">
+          <AlertTriangle size={20} className="flex-shrink-0 mt-0.5" />
+          <span className="text-sm font-medium">{error}</span>
         </div>
       )}
 
       {uploadResult && (
-        <div className={`upload-message ${uploadResult.error_count > 0 ? 'warning-message' : 'success-message'}`}>
-          <div className="result-header">
-            <span className="message-icon">
-              {uploadResult.error_count === 0 ? '✅' : '⚠️'}
-            </span>
-            <span className="result-title">{uploadResult.message}</span>
-          </div>
-          <div className="result-stats">
-            <div className="stat">
-              <span className="stat-label">Total Records:</span>
-              <span className="stat-value">{uploadResult.total_records}</span>
-            </div>
-            <div className="stat success">
-              <span className="stat-label">Success:</span>
-              <span className="stat-value">{uploadResult.success_count}</span>
-            </div>
-            {uploadResult.error_count > 0 && (
-              <div className="stat error">
-                <span className="stat-label">Failed:</span>
-                <span className="stat-value">{uploadResult.error_count}</span>
-              </div>
-            )}
-          </div>
-          {uploadResult.sample_errors && uploadResult.sample_errors.length > 0 && (
-            <div className="error-details">
-              <p className="error-details-title">Sample Errors:</p>
-              <ul>
-                {uploadResult.sample_errors.map((err, idx) => (
-                  <li key={idx}>{err}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <div style={{ marginTop: '12px', padding: '8px', background: 'rgba(0,0,0,0.05)', borderRadius: '4px', fontSize: '13px' }}>
-            💡 <strong>Tip:</strong> Go to the "Overview" or "Cost Trends" tab to see your uploaded data visualized!
-          </div>
-          {onSwitchToOverview && (
-            <button
-              onClick={onSwitchToOverview}
-              style={{
-                marginTop: '12px',
-                padding: '10px 20px',
-                background: '#0056b3',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontWeight: '600',
-                fontSize: '14px'
-              }}
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+             <div
+            className={`p-5 rounded-xl border ${
+                uploadResult.error_count > 0
+                ? 'bg-amber-50 border-amber-200'
+                : 'bg-green-50 border-green-200'
+            }`}
             >
-              📊 View Dashboard
-            </button>
-          )}
+            <div className="flex items-center gap-3 mb-4">
+                {uploadResult.error_count === 0 ? (
+                <CheckCircle className="text-green-600" size={20} />
+                ) : (
+                <AlertTriangle className="text-amber-600" size={20} />
+                )}
+                <span className={`font-semibold text-sm ${
+                uploadResult.error_count === 0 ? 'text-green-700' : 'text-amber-700'
+                }`}>
+                {uploadResult.message}
+                </span>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-2 mb-4">
+                <div className="bg-white/60 p-3 rounded-lg border border-transparent">
+                    <span className="block text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Total</span>
+                    <span className="block text-lg font-bold text-slate-800">{uploadResult.total_records}</span>
+                </div>
+                <div className="bg-emerald-100/50 p-3 rounded-lg border border-emerald-100/50">
+                    <span className="block text-xs text-emerald-700 uppercase font-bold tracking-wider mb-1">Success</span>
+                    <span className="block text-lg font-bold text-emerald-700">{uploadResult.success_count}</span>
+                </div>
+                {uploadResult.error_count > 0 && (
+                <div className="bg-red-100/50 p-3 rounded-lg border border-red-100/50">
+                    <span className="block text-xs text-red-700 uppercase font-bold tracking-wider mb-1">Failed</span>
+                    <span className="block text-lg font-bold text-red-700">{uploadResult.error_count}</span>
+                </div>
+                )}
+            </div>
+
+            {uploadResult.sample_errors && uploadResult.sample_errors.length > 0 && (
+                <div className="mb-4 p-4 bg-white rounded-lg border border-red-200 text-xs">
+                    <p className="font-bold text-red-700 mb-2 uppercase tracking-wide">Error Log Sample:</p>
+                    <ul className="list-disc list-inside text-red-600 space-y-1 font-mono">
+                        {uploadResult.sample_errors.map((err, idx) => (
+                        <li key={idx}>{err}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+            
+            <div className="flex items-start gap-2 p-3 bg-white/60 rounded-lg text-xs text-slate-600">
+                <Lightbulb className="text-amber-500 flex-shrink-0 mt-0.5" size={16} />
+                <span>
+                <strong>Tip:</strong> Head over to the Dashboard to see your new data in action.
+                </span>
+            </div>
+            
+            </div>
+             {onSwitchToOverview && (
+                <button
+                onClick={onSwitchToOverview}
+                className="w-full px-5 py-3 bg-blue-600 text-white rounded-xl font-semibold text-sm hover:bg-blue-700 active:transform active:scale-[0.99] transition-all shadow-md shadow-blue-600/20"
+                >
+                Go to Dashboard
+                </button>
+            )}
         </div>
       )}
 
-      <div className="upload-actions">
+      {/* Upload Button - Only show if not successful already or if we want to allow re-upload immediately */}
+      {!uploadResult && (
         <button
-          onClick={handleUpload}
-          disabled={!file || uploading}
-          className="upload-btn"
+            onClick={handleUpload}
+            disabled={!file || uploading}
+            className="w-full flex items-center justify-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-xl font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 active:scale-[0.99] transition-all shadow-md shadow-blue-600/20"
         >
-          {uploading ? (
+            {uploading ? (
             <>
-              <span className="spinner"></span>
-              Uploading...
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Processing Data...
             </>
-          ) : (
+            ) : (
             <>
-              <span>📤</span>
-              Upload File
+                Start Upload
             </>
-          )}
+            )}
         </button>
-      </div>
+      )}
 
-      <div className="upload-info">
-        <p className="info-title">📋 File Format Requirements:</p>
-        <ul className="info-list">
-          <li><strong>Required columns:</strong> provider, service_name, cost, usage_start_date, usage_end_date</li>
-          <li><strong>Optional columns:</strong> region, cloud_account_id, resource_id, usage_quantity, usage_unit, currency</li>
-          <li><strong>Date format:</strong> YYYY-MM-DD (e.g., 2026-01-01)</li>
-          <li><strong>Download the template</strong> above to see the correct format</li>
+      <div className="bg-slate-50 p-5 rounded-xl border border-slate-200">
+        <p className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+           Requirements
+        </p>
+        <ul className="space-y-2 text-xs text-slate-600">
+          <li className="flex items-start gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5"></div>
+            <span><strong>Required:</strong> provider, service_name, cost, usage_start_date</span>
+          </li>
+          <li className="flex items-start gap-2">
+             <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5"></div>
+            <span><strong>Date format:</strong> YYYY-MM-DD (e.g., 2026-01-01)</span>
+          </li>
         </ul>
       </div>
     </div>

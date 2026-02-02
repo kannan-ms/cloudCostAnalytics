@@ -1,146 +1,82 @@
-import React from 'react';
-import {
-  Upload,
-  LogOut,
-  User
-} from 'lucide-react';
+import React, { useState } from 'react';
+import { Upload, LogOut, Bell, Search } from 'lucide-react';
 
-const Header = ({ onUploadClick, onLogout }) => {
-  // We remove non-functional items like search (unless we implement it), notifications, etc.
-  // The prompt says "No dead clicks". 
+const Header = ({ onUploadClick, onLogout, user = {} }) => {
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+
+  const getInitials = (name) => {
+      if (!name) return 'JD';
+      return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  };
+
+  const initials = getInitials(user.name);
 
   return (
-    <header className="header">
-      <div className="header-left">
-        <div className="breadcrumbs">
-          <span className="breadcrumb-item">CLOUD INSIGHT</span>
-          <span className="breadcrumb-separator">›</span>
-          <span className="breadcrumb-item active">COST ANALYTICS</span>
-        </div>
+    <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-20">
+      {/* Left Side: Context / Breadcrumbs */}
+      <div className="flex items-center gap-2">
+         <div className="hidden md:flex items-center text-sm font-medium text-slate-500">
+            <span className="hover:text-slate-900 cursor-pointer transition-colors">Platform</span>
+            <span className="mx-2 text-slate-300">/</span>
+            <span className="text-slate-900">Cost Analytics</span>
+         </div>
       </div>
 
-      <div className="header-right">
-        <button className="upload-btn" onClick={onUploadClick}>
+      {/* Right Side: Actions */}
+      <div className="flex items-center gap-4">
+        {/* Search - Visual Only for now */}
+        <div className="relative hidden md:block">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input 
+                type="text" 
+                placeholder="Search resources..." 
+                className="pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 w-64 transition-all"
+            />
+        </div>
+
+        <button
+          onClick={onUploadClick}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 active:bg-blue-800 transition-colors shadow-sm shadow-blue-600/20"
+        >
           <Upload size={16} />
-          Upload Cost File
+          <span className="hidden sm:inline">Upload Data</span>
         </button>
 
-        <div className="divider"></div>
+        <div className="h-6 w-px bg-slate-200 mx-1" />
+        
+        <button className="p-2 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-full transition-colors relative">
+            <Bell size={20} />
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
+        </button>
 
-        <div className="user-profile">
-          <div className="user-avatar">
-            <User size={18} />
-          </div>
-          <button className="logout-btn" onClick={onLogout} title="Logout">
-            <LogOut size={16} />
-          </button>
+        <div className="relative">
+            <button 
+                onClick={() => setIsProfileOpen(!isProfileOpen)}
+                className={`flex items-center justify-center w-9 h-9 rounded-full border text-slate-600 font-medium transition-colors ${isProfileOpen ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-slate-100 border-slate-200 hover:bg-slate-50'}`}
+            >
+                {initials}
+            </button>
+
+            {isProfileOpen && (
+                <>
+                    <div className="fixed inset-0 z-30" onClick={() => setIsProfileOpen(false)}></div>
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 py-1 animate-in fade-in slide-in-from-top-2 duration-200 z-40">
+                        <div className="px-4 py-2 border-b border-slate-50">
+                            <p className="text-sm font-medium text-slate-900 truncate" title={user.name}>{user.name || 'Account'}</p>
+                            <p className="text-xs text-slate-500 truncate" title={user.email}>{user.email || 'user@example.com'}</p>
+                        </div>
+                        <button 
+                            onClick={onLogout}
+                            className="w-full text-left px-4 py-2 text-sm text-slate-600 hover:bg-red-50 hover:text-red-600 flex items-center gap-2 transition-colors"
+                        >
+                            <LogOut size={14} />
+                            Sign Out
+                        </button>
+                    </div>
+                </>
+            )}
         </div>
       </div>
-
-      <style>{`
-        .header {
-          height: 64px;
-          background: white;
-          border-bottom: 1px solid var(--border-light);
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 0 32px;
-          color: var(--text-medium);
-          box-shadow: var(--shadow-sm);
-          z-index: 10;
-        }
-
-        .header-left {
-          display: flex;
-          align-items: center;
-        }
-
-        .breadcrumbs {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 12px;
-          font-weight: 600;
-          text-transform: uppercase;
-          color: var(--text-light);
-          letter-spacing: 0.5px;
-        }
-
-        .breadcrumb-item.active {
-          color: var(--primary-blue);
-          font-weight: 700;
-        }
-
-        .header-right {
-          display: flex;
-          align-items: center;
-          gap: 20px;
-        }
-
-        .upload-btn {
-          background: var(--primary-blue);
-          color: white;
-          border: none;
-          padding: 8px 16px;
-          border-radius: 6px;
-          font-size: 13px;
-          font-weight: 600;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          transition: background 0.2s;
-          box-shadow: 0 2px 4px rgba(41, 98, 255, 0.2);
-        }
-
-        .upload-btn:hover {
-          background: var(--primary-hover);
-          transform: translateY(-1px);
-        }
-
-        .upload-btn:active {
-          transform: translateY(0);
-        }
-
-        .divider {
-          height: 24px;
-          width: 1px;
-          background: var(--border-light);
-        }
-
-        .user-profile {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .user-avatar {
-          width: 36px;
-          height: 36px;
-          background: #f1f5f9;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: var(--text-medium);
-          border: 1px solid var(--border-light);
-        }
-
-        .logout-btn {
-          background: none;
-          border: none;
-          color: var(--text-light);
-          padding: 8px;
-          border-radius: 50%;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .logout-btn:hover {
-          background: #ffebee;
-          color: var(--status-error);
-        }
-      `}</style>
     </header>
   );
 };

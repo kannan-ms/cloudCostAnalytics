@@ -46,16 +46,16 @@ const CostChart = ({ costs, chartType = 'bar', onBarClick }) => {
   });
   const serviceList = Array.from(allServices);
 
-  // 3. Assign Colors dynamically
+  // 3. Assign Colors dynamically (Slate/Blue Theme Palette)
   const colors = [
-      '#0b1136', // Navy
-      '#00c853', // Green
-      '#ff3d00', // Red/Orange
-      '#80d8ff', // Light Blue
-      '#D500F9', // Purple
-      '#FFD600', // Yellow
-      '#2962FF', // Blue
-      '#6200EA'  // Deep Purple
+      '#3b82f6', // blue-500
+      '#10b981', // emerald-500
+      '#f59e0b', // amber-500
+      '#ef4444', // red-500
+      '#8b5cf6', // violet-500
+      '#ec4899', // pink-500
+      '#6366f1', // indigo-500
+      '#06b6d4', // cyan-500
   ];
 
   // --- Data Preparation for Time Series (Bar, Line, Area) ---
@@ -69,12 +69,16 @@ const CostChart = ({ costs, chartType = 'bar', onBarClick }) => {
           backgroundColor: colors[index % colors.length],
           borderColor: colors[index % colors.length],
           borderWidth: 1,
-          barThickness: 16,
-          borderRadius: 2,
+          barThickness: 'flex', // Adaptive bar thickness
+          maxBarThickness: 32,
+          borderRadius: 4,
           // For Line/Area charts
-          pointRadius: 2,
-          tension: 0.3,
-          fill: chartType === 'area' ? true : false, 
+          pointRadius: 3,
+          pointBackgroundColor: '#fff',
+          pointBorderColor: colors[index % colors.length],
+          pointBorderWidth: 2,
+          tension: 0.4,
+          fill: chartType === 'area' ? 'origin' : false, 
       };
   });
 
@@ -82,10 +86,11 @@ const CostChart = ({ costs, chartType = 'bar', onBarClick }) => {
       {
           label: 'Total Cost',
           data: chartTrends.map(t => t.total_cost),
-          backgroundColor: '#0b1136',
-          borderColor: '#0b1136',
+          backgroundColor: '#3b82f6',
+          borderColor: '#3b82f6',
           borderWidth: 1,
-          barThickness: 16,
+          barThickness: 'flex',
+          maxBarThickness: 32,
           fill: chartType === 'area',
       }
   ];
@@ -125,18 +130,29 @@ const CostChart = ({ costs, chartType = 'bar', onBarClick }) => {
       legend: {
         display: true,
         position: 'bottom',
-        labels: { boxWidth: 10, font: { size: 10 } }
-      },
-      tooltip: {
-        backgroundColor: 'rgba(11, 17, 54, 0.9)',
-        titleFont: { family: 'Inter', size: 13 },
-        bodyFont: { family: 'Inter', size: 12 },
-        padding: 10,
-        cornerRadius: 4,
-        callbacks: {
-          label: (context) => ` ${context.dataset.label || context.label}: $${context.raw.toFixed(2)}`
+        labels: { 
+            usePointStyle: true,
+            boxWidth: 8, 
+            padding: 20,
+            font: { family: "'Inter', sans-serif", size: 11 },
+            color: '#64748b' // slate-500
         }
       },
+      tooltip: {
+        backgroundColor: '#1e293b', // slate-800
+        padding: 12,
+        titleFont: { family: "'Inter', sans-serif", size: 13, weight: '600' },
+        bodyFont: { family: "'Inter', sans-serif", size: 12 },
+        cornerRadius: 8,
+        displayColors: true,
+        boxPadding: 4,
+        callbacks: {
+          label: (context) => ` ${context.dataset.label || context.label}: $${context.raw.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
+        }
+      },
+      title: {
+          display: false
+      }
     },
     onClick: (event, elements) => {
       if (elements && elements.length > 0 && (chartType === 'bar' || chartType === 'line' || chartType === 'area')) {
@@ -153,13 +169,25 @@ const CostChart = ({ costs, chartType = 'bar', onBarClick }) => {
         x: {
           stacked: chartType === 'bar' || chartType === 'area', 
           grid: { display: false, drawBorder: false },
-          ticks: { font: { family: 'Inter', size: 10 }, color: '#8b9bb4', maxRotation: 90, minRotation: 90 }
+          ticks: { 
+              font: { family: "'Inter', sans-serif", size: 11 }, 
+              color: '#94a3b8', // slate-400
+              maxRotation: 0,
+              autoSkip: true,
+              maxTicksLimit: 12
+          },
+          border: { display: false }
         },
         y: {
           stacked: chartType === 'bar' || chartType === 'area',
-          grid: { color: '#f0f0f0', borderDash: [4, 4], drawBorder: false },
-          ticks: { font: { family: 'Inter', size: 10 }, color: '#8b9bb4', callback: (value) => `$${value}` },
+          grid: { color: '#f1f5f9', borderDash: [4, 4], drawBorder: false }, // slate-100
+          ticks: { 
+              font: { family: "'Inter', sans-serif", size: 11 }, 
+              color: '#94a3b8', // slate-400
+              callback: (value) => `$${value}` 
+            },
           beginAtZero: true,
+          border: { display: false }
         },
       },
   };
@@ -168,14 +196,24 @@ const CostChart = ({ costs, chartType = 'bar', onBarClick }) => {
       ...commonOptions,
       plugins: {
           ...commonOptions.plugins,
-          legend: { position: 'right' }
-      }
+          legend: { 
+              position: 'right',
+              labels: {
+                  usePointStyle: true,
+                  boxWidth: 8,
+                  padding: 15,
+                  font: { family: "'Inter', sans-serif", size: 11 },
+                  color: '#64748b'
+              }
+          }
+      },
+      cutout: chartType === 'doughnut' ? '70%' : undefined
   };
 
   // --- Render Chart based on Type ---
   if (chartType === 'line' || chartType === 'area') {
       return (
-        <div style={{ height: '100%', width: '100%' }}>
+        <div className="w-full h-full">
           <Line data={timeSeriesData} options={scaleOptions} />
         </div>
       );
@@ -183,7 +221,7 @@ const CostChart = ({ costs, chartType = 'bar', onBarClick }) => {
   
   if (chartType === 'doughnut') {
       return (
-        <div style={{ height: '100%', width: '100%', position: 'relative' }}>
+        <div className="w-full h-full relative">
              <Doughnut data={distributionData} options={pieOptions} />
         </div>
       );
@@ -191,7 +229,7 @@ const CostChart = ({ costs, chartType = 'bar', onBarClick }) => {
 
   if (chartType === 'pie') {
       return (
-        <div style={{ height: '100%', width: '100%', position: 'relative' }}>
+        <div className="w-full h-full relative">
              <Pie data={distributionData} options={pieOptions} />
         </div>
       );
@@ -199,7 +237,7 @@ const CostChart = ({ costs, chartType = 'bar', onBarClick }) => {
 
   // Default to Bar (Stacked)
   return (
-    <div style={{ height: '100%', width: '100%' }}>
+    <div className="w-full h-full">
       <Bar data={timeSeriesData} options={scaleOptions} />
     </div>
   );

@@ -804,7 +804,7 @@ def upload_cost_file(current_user_id):
             
         # Run anomaly detection on the new data
         print(f"DEBUG: Running anomaly detection for user {current_user_id}")
-        anomaly_detector.run_anomaly_detection(current_user_id)
+        anomaly_detector.run_anomaly_detection_for_user(current_user_id)
         
         # Determine status code
         if ingest_result['error_count'] == 0:

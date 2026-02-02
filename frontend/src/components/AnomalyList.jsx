@@ -1,151 +1,101 @@
 import React from 'react';
-import { AlertTriangle, TrendingUp, CheckCircle } from 'lucide-react';
+import { AlertTriangle, TrendingUp, CheckCircle, AlertOctagon, Info } from 'lucide-react';
 
 const AnomalyList = ({ anomalies }) => {
   if (!anomalies || anomalies.length === 0) {
     return (
-      <div className="empty-state">
-        <CheckCircle size={48} color="var(--status-success)" />
-        <h3>No Anomalies Detected</h3>
-        <p>Your cloud costs are within expected content.</p>
-        <style>{`
-          .empty-state {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            color: var(--text-medium);
-            gap: 16px;
-          }
-        `}</style>
+      <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-4 py-12">
+        <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center">
+            <CheckCircle size={32} className="text-green-500" />
+        </div>
+        <div className="text-center">
+            <h3 className="font-semibold text-slate-700 text-lg">System Healthy</h3>
+            <p className="text-sm text-slate-500 mt-1">No cost anomalies detected in the selected period.</p>
+        </div>
       </div>
     );
   }
 
+  const getSeverityConfig = (severity) => {
+    switch (severity.toLowerCase()) {
+      case 'high':
+        return { 
+            bg: 'bg-red-50', 
+            border: 'border-red-200', 
+            text: 'text-red-700', 
+            icon: AlertOctagon,
+            badge: 'bg-red-100 text-red-700'
+        };
+      case 'medium':
+        return { 
+            bg: 'bg-orange-50', 
+            border: 'border-orange-200', 
+            text: 'text-orange-700', 
+            icon: AlertTriangle,
+            badge: 'bg-orange-100 text-orange-700'
+        };
+      case 'low':
+      default:
+        return { 
+            bg: 'bg-blue-50', 
+            border: 'border-blue-200', 
+            text: 'text-blue-700', 
+            icon: Info,
+            badge: 'bg-blue-100 text-blue-700'
+        };
+    }
+  };
+
   return (
-    <div className="anomaly-list">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto max-h-full pr-2">
       {anomalies.map((item, index) => {
-        // Map backend fields to frontend expectations safely
         const cost = item.detected_value || item.cost || 0;
         const average = item.expected_value || item.average || 0;
         const date = item.detected_at || item.date || new Date().toISOString();
         const service = item.service_name || item.service || 'Unknown Service';
         const severity = item.severity || 'low';
+        
+        const style = getSeverityConfig(severity);
+        const Icon = style.icon;
 
         return (
-          <div key={index} className="anomaly-card">
-            <div className="anomaly-header">
-              <div className={`severity-badge ${severity}`}>
-                {severity}
+          <div key={index} className={`rounded-xl border ${style.border} bg-white p-5 shadow-sm hover:shadow-md transition-all group`}>
+            {/* Header */}
+            <div className="flex justify-between items-start mb-3">
+              <div className="flex items-center gap-2">
+                <div className={`p-1.5 rounded-lg ${style.bg} ${style.text}`}>
+                    <Icon size={16} />
+                </div>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ${style.badge}`}>
+                    {severity}
+                </span>
               </div>
-              <div className="anomaly-date">{new Date(date).toLocaleDateString()}</div>
+              <span className="text-xs text-slate-400 font-medium">{new Date(date).toLocaleDateString()}</span>
             </div>
 
-            <div className="anomaly-content">
-              <div className="service-info">
-                <AlertTriangle size={20} className="warning-icon" />
-                <div>
-                  <div className="service-name">{service}</div>
-                  <div className="cost-impact">
-                    +${(cost - average).toFixed(2)} excess
-                  </div>
+            {/* Main Info */}
+            <div className="mb-4">
+                <h4 className="font-bold text-slate-800 text-base">{service}</h4>
+                <div className="flex items-center gap-1.5 text-red-600 mt-1">
+                    <TrendingUp size={14} />
+                    <span className="text-sm font-semibold">+${(cost - average).toFixed(2)} Excess</span>
                 </div>
-              </div>
+            </div>
 
-              <div className="metric-row">
-                <div className="metric">
-                  <span className="label">Actual</span>
-                  <span className="value">${cost.toFixed(2)}</span>
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100">
+                <div>
+                   <p className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">Detected</p>
+                   <p className="font-bold text-slate-900">${cost.toFixed(2)}</p>
                 </div>
-                <div className="metric">
-                  <span className="label">Expected</span>
-                  <span className="value">${average.toFixed(2)}</span>
+                <div className="text-right">
+                   <p className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">Expected</p>
+                   <p className="font-medium text-slate-500">${average.toFixed(2)}</p>
                 </div>
-              </div>
             </div>
           </div>
         )
       })}
-
-      <style>{`
-        .anomaly-list {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-          gap: 16px;
-          padding: 10px;
-        }
-
-        .anomaly-card {
-          border: 1px solid var(--border-light);
-          border-radius: 6px;
-          padding: 16px;
-          border-left: 4px solid var(--status-warning);
-          background: #fff;
-        }
-
-        .anomaly-header {
-          display: flex;
-          justify-content: space-between;
-          margin-bottom: 12px;
-        }
-
-        .severity-badge {
-          text-transform: uppercase;
-          font-size: 10px;
-          font-weight: 700;
-          padding: 2px 8px;
-          border-radius: 10px;
-        }
-
-        .severity-badge.high { background: #ffebee; color: #c62828; }
-        .severity-badge.medium { background: #fff3e0; color: #ef6c00; }
-        .severity-badge.low { background: #e8f5e9; color: #2e7d32; }
-
-        .service-info {
-          display: flex;
-          gap: 12px;
-          margin-bottom: 16px;
-        }
-
-        .warning-icon {
-          color: var(--status-warning);
-        }
-
-        .service-name {
-          font-weight: 700;
-          color: var(--text-dark);
-        }
-
-        .cost-impact {
-          font-size: 12px;
-          color: var(--status-error);
-          font-weight: 600;
-        }
-
-        .metric-row {
-          display: flex;
-          justify-content: space-between;
-          padding-top: 12px;
-          border-top: 1px dashed var(--border-light);
-        }
-
-        .metric {
-          display: flex;
-          flex-direction: column;
-        }
-
-        .metric .label {
-          font-size: 10px;
-          color: var(--text-light);
-          text-transform: uppercase;
-        }
-
-        .metric .value {
-          font-weight: 600;
-          font-size: 14px;
-        }
-      `}</style>
     </div>
   );
 };

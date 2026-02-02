@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Filter } from 'lucide-react';
+import { X, Filter } from 'lucide-react';
 import api from '../services/api';
 
 const FilterBar = ({ filters = {}, onFilterChange }) => {
@@ -17,10 +17,10 @@ const FilterBar = ({ filters = {}, onFilterChange }) => {
                 const res = await api.get('/costs/filters');
                 if (res.data.success) {
                     setOptions({
-                        services: res.data.services,
-                        regions: res.data.regions,
-                        accounts: res.data.accounts,
-                        providers: res.data.providers
+                        services: res.data.services || [],
+                        regions: res.data.regions || [],
+                        accounts: res.data.accounts || [],
+                        providers: res.data.providers || []
                     });
                 }
             } catch (err) {
@@ -29,13 +29,12 @@ const FilterBar = ({ filters = {}, onFilterChange }) => {
                 setLoading(false);
             }
         };
-
         fetchOptions();
     }, []);
 
     const handleFilterChange = (key, value) => {
         const newFilters = { ...filters };
-        if (value === 'No Filters Applied' || value === '') {
+        if (value === 'All' || value === '') {
             delete newFilters[key];
         } else {
             newFilters[key] = value;
@@ -49,181 +48,75 @@ const FilterBar = ({ filters = {}, onFilterChange }) => {
         const newFilters = { ...filters };
         delete newFilters[key];
         if (onFilterChange) {
-             onFilterChange(newFilters);
+            onFilterChange(newFilters);
         }
     };
 
-    const FilterDropdown = ({ label, field, optionsList, currentValue }) => (
-        <div className="filter-chip">
-            <div className="filter-label">{label}</div>
-            <div className={`filter-value ${currentValue ? 'active' : ''}`}>
-               <select 
-                    value={currentValue || ''} 
-                    onChange={(e) => handleFilterChange(field, e.target.value)}
-                    className="filter-select"
-                >
-                    <option value="">No Filters Applied</option>
-                    {optionsList && optionsList.map(opt => (
-                        <option key={opt} value={opt}>{opt}</option>
-                    ))}
-               </select>
-               {currentValue && (
-                   <button className="remove-filter" onClick={(e) => {
-                       removeFilter(field);
-                   }}>
-                        <X size={12} />
-                   </button>
-               )}
-            </div>
-        </div>
-    );
+    const hasFilters = Object.keys(filters).length > 0;
+
+    if (loading) return null; // Or a skeleton
 
     return (
-        <div className="filter-bar">
-            <FilterDropdown 
-                label="Cloud Platform" 
-                field="provider" 
-                optionsList={options.providers} 
-                currentValue={filters.provider} 
-            />
-            
-            <FilterDropdown 
-                label="Account" 
-                field="account" 
-                optionsList={options.accounts} 
-                currentValue={filters.account} 
-            />
-
-            <FilterDropdown 
-                label="Region" 
-                field="region" 
-                optionsList={options.regions} 
-                currentValue={filters.region} 
-            />
-
-            <FilterDropdown 
-                label="Service" 
-                field="service" 
-                optionsList={options.services} 
-                currentValue={filters.service} 
-            />
-
-             <div className="filter-chip">
-                <div className="filter-label">Transaction Type</div>
-                <div className="filter-value active">
-                     <span style={{ padding: '6px 8px' }}>USAGE</span>
-                </div>
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-6">
+            <div className="flex items-center gap-2 mb-3 text-slate-500 text-sm font-medium">
+                <Filter size={16} />
+                <span>Filter Data</span>
             </div>
+            
+            <div className="flex flex-wrap items-center gap-3">
+                {['service', 'region', 'account', 'provider'].map((key) => {
+                     // Pluralize key for accessing options
+                    const optionsKey = key + 's'; 
+                    const currentVal = filters[key] || '';
 
-            <button className="add-filter-btn">
-                <Plus size={14} />
-                More Filters
-            </button>
+                    return (
+                        <div key={key} className="relative">
+                            <select
+                                className={`appearance-none pl-3 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-shadow cursor-pointer min-w-[140px] ${currentVal ? 'bg-blue-50 border-blue-200 text-blue-700' : ''}`}
+                                value={currentVal}
+                                onChange={(e) => handleFilterChange(key, e.target.value)}
+                            >
+                                <option value="">All {key.charAt(0).toUpperCase() + key.slice(1)}s</option>
+                                {options[optionsKey]?.map((opt) => (
+                                    <option key={opt} value={opt}>
+                                        {opt}
+                                    </option>
+                                ))}
+                            </select>
+                            {/* Custom arrow could go here if appearance-none is used, but native is fine for functionality for now */}
+                             <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
+                                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                            </div>
+                        </div>
+                    );
+                })}
 
-            <style>{`
-        .filter-bar {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin-bottom: 24px;
-          flex-wrap: wrap;
-        }
-
-        .filter-chip {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-
-        .filter-label {
-          font-size: 11px;
-          font-weight: 700;
-          color: var(--text-dark);
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        }
-        
-        .filter-label::before {
-          content: "::";
-          color: #bdbdbd;
-          font-weight: 400;
-          margin-right: 4px;
-          font-size: 14px;
-          letter-spacing: -1px;
-        }
-
-        .filter-value {
-          background: white;
-          border: 1px solid var(--border-light);
-          padding: 0;
-          border-radius: 4px;
-          font-size: 11px;
-          color: var(--text-light);
-          display: flex;
-          align-items: center;
-          min-width: 140px;
-          position: relative;
-        }
-
-        .filter-value.active {
-          border-color: var(--primary-blue);
-          color: var(--text-dark);
-        }
-
-        .filter-select {
-            appearance: none;
-            border: none;
-            background: transparent;
-            width: 100%;
-            padding: 6px 24px 6px 8px;
-            font-size: 11px;
-            color: inherit;
-            cursor: pointer;
-            outline: none;
-            font-family: inherit;
-        }
-        
-        .filter-select:focus {
-            background: #f8fafc;
-        }
-
-        .remove-filter {
-          position: absolute;
-          right: 4px;
-          background: none;
-          border: none;
-          color: var(--text-light);
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          padding: 2px;
-          z-index: 10;
-        }
-
-        .remove-filter:hover {
-          color: #ef4444;
-        }
-
-        .add-filter-btn {
-          margin-top: 16px; 
-          background: none;
-          border: 1px dashed var(--border-light);
-          padding: 6px 12px;
-          border-radius: 4px;
-          color: var(--primary-blue);
-          font-size: 12px;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          cursor: pointer;
-        }
-        
-        .add-filter-btn:hover {
-            background: #f0f9ff;
-            border-color: var(--primary-blue);
-        }
-            `}</style>
+                {hasFilters && (
+                    <button
+                        onClick={() => onFilterChange({})}
+                        className="ml-auto text-sm text-red-500 font-medium hover:text-red-700 px-3 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center gap-1"
+                    >
+                        <X size={14} />
+                        Clear All
+                    </button>
+                )}
+            </div>
+             
+             {/* Active Tags Visual (Optional, adds nice touch) */}
+             {hasFilters && (
+                <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-slate-100">
+                    <span className="text-xs text-slate-400 font-medium py-1">Active:</span>
+                    {Object.entries(filters).map(([key, value]) => (
+                        <span key={key} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100/50 text-blue-700 text-xs rounded-full border border-blue-200/50">
+                            <span className="opacity-60 capitalize">{key}:</span>
+                            <span className="font-semibold">{value}</span>
+                            <button onClick={() => removeFilter(key)} className="hover:text-blue-900 ml-1">
+                                <X size={12} />
+                            </button>
+                        </span>
+                    ))}
+                </div>
+             )}
         </div>
     );
 };

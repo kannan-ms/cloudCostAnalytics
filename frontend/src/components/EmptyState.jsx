@@ -1,117 +1,53 @@
 import React from 'react';
-import { Cloud, Upload } from 'lucide-react';
+import { Cloud, Upload, Zap, Shield, BarChart3 } from 'lucide-react';
 
 const EmptyState = ({ onUploadClick }) => {
     return (
-        <div className="empty-state-container">
-            <div className="empty-content">
-                <div className="icon-circle">
-                    <Cloud size={48} />
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-slate-50/50">
+            <div className="max-w-xl w-full bg-white rounded-2xl border border-slate-200 shadow-xl p-12 relative overflow-hidden">
+                {/* Decorative Background Blob */}
+                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 via-indigo-500 to-violet-500"></div>
+                
+                <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm ring-1 ring-blue-100">
+                    <Cloud size={40} />
                 </div>
-                <h2>Welcome to Cloud Insight</h2>
-                <p>Upload a cloud cost file (CSV) to generate analytics and detect anomalies instantly.</p>
+                
+                <h2 className="text-slate-900 mb-3 text-2xl font-bold tracking-tight">Welcome to Cloud Insight</h2>
+                <p className="text-slate-500 mb-8 leading-relaxed max-w-sm mx-auto">
+                    Upload your cloud cost data (CSV) to unlock instant analytics, anomaly detection, and forecasting.
+                </p>
 
-                <button className="primary-upload-btn" onClick={onUploadClick}>
-                    <Upload size={20} />
-                    Upload Cost Data
-                </button>
+                <div className="flex justify-center mb-8">
+                    <button
+                        onClick={onUploadClick}
+                        className="bg-blue-600 text-white border border-transparent px-8 py-3 rounded-xl text-base font-semibold inline-flex items-center gap-2.5 transition-all shadow-lg shadow-blue-600/20 hover:bg-blue-700 hover:-translate-y-0.5 active:translate-y-0"
+                    >
+                        <Upload size={20} />
+                        Upload Cost Data
+                    </button>
+                </div>
 
-                <div className="features-grid">
-                    <div className="feature">
-                        <span className="check">✓</span> Instant Cost Visualization
-                    </div>
-                    <div className="feature">
-                        <span className="check">✓</span> Anomaly Detection
-                    </div>
-                    <div className="feature">
-                        <span className="check">✓</span> Service Breakdown
-                    </div>
+                <div className="grid grid-cols-3 gap-4 text-left border-t border-slate-100 pt-8">
+                     <div className="text-center group">
+                        <div className="mx-auto w-10 h-10 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center mb-2 group-hover:bg-indigo-100 transition-colors">
+                            <Zap size={18} />
+                        </div>
+                        <p className="text-xs font-semibold text-slate-700">Instant Analysis</p>
+                     </div>
+                     <div className="text-center group">
+                        <div className="mx-auto w-10 h-10 bg-amber-50 text-amber-600 rounded-lg flex items-center justify-center mb-2 group-hover:bg-amber-100 transition-colors">
+                            <Shield size={18} />
+                        </div>
+                        <p className="text-xs font-semibold text-slate-700">Anomaly Detection</p>
+                     </div>
+                     <div className="text-center group">
+                        <div className="mx-auto w-10 h-10 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center mb-2 group-hover:bg-emerald-100 transition-colors">
+                            <BarChart3 size={18} />
+                        </div>
+                        <p className="text-xs font-semibold text-slate-700">Cost Breakdown</p>
+                     </div>
                 </div>
             </div>
-
-            <style>{`
-        .empty-state-container {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          height: 60vh; /* Centering */
-          text-align: center;
-        }
-
-        .empty-content {
-          max-width: 480px;
-          padding: 40px;
-          background: white;
-          border-radius: 12px;
-          border: 1px solid var(--border-light);
-          box-shadow: var(--shadow-md);
-        }
-
-        .icon-circle {
-          width: 80px;
-          height: 80px;
-          background: #e3f2fd;
-          color: var(--primary-blue);
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin: 0 auto 24px;
-        }
-
-        h2 {
-          color: var(--text-dark);
-          margin-bottom: 12px;
-          font-size: 24px;
-        }
-
-        p {
-          color: var(--text-medium);
-          margin-bottom: 32px;
-          line-height: 1.6;
-        }
-
-        .primary-upload-btn {
-          background: var(--primary-blue);
-          color: white;
-          border: none;
-          padding: 12px 32px;
-          border-radius: 8px;
-          font-size: 16px;
-          font-weight: 600;
-          display: inline-flex;
-          align-items: center;
-          gap: 10px;
-          transition: transform 0.2s, background 0.2s;
-          box-shadow: 0 4px 6px rgba(41, 98, 255, 0.2);
-          cursor: pointer;
-        }
-
-        .primary-upload-btn:hover {
-          background: var(--primary-hover);
-          transform: translateY(-2px);
-        }
-
-        .features-grid {
-          margin-top: 40px;
-          display: flex;
-          justify-content: center;
-          gap: 24px;
-          font-size: 12px;
-          color: var(--text-light);
-        }
-
-        .feature {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-
-        .check {
-          color: var(--status-success);
-          font-weight: bold;
-        }
-      `}</style>
         </div>
     );
 };

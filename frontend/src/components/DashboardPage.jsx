@@ -7,24 +7,37 @@ import Reports from './Reports';
 
 const DashboardPage = ({ view }) => {
     const [showUpload, setShowUpload] = useState(false);
+    const [globalFilters, setGlobalFilters] = useState({});
+
+    const handleGlobalFilterChange = (newFilters) => {
+        setGlobalFilters(newFilters);
+    };
 
     let content;
     switch (view) {
         case 'budgets':
-            content = <Budgets />;
+            content = <Budgets globalFilters={globalFilters} />;
             break;
         case 'forecasts':
-            content = <Forecasts />;
+            content = <Forecasts globalFilters={globalFilters} />;
             break;
         case 'reports':
-            content = <Reports />;
+            content = <Reports globalFilters={globalFilters} />;
             break;
         default:
-            content = <Dashboard showUpload={showUpload} setShowUpload={setShowUpload} />;
+            content = <Dashboard 
+                showUpload={showUpload} 
+                setShowUpload={setShowUpload} 
+                globalFilters={globalFilters}
+            />;
     }
 
     return (
-        <MainLayout onUploadClick={() => setShowUpload(true)}>
+        <MainLayout 
+            onUploadClick={() => setShowUpload(true)}
+            globalFilters={globalFilters}
+            onGlobalFilterChange={handleGlobalFilterChange}
+        >
             {content}
         </MainLayout>
     );

@@ -2,7 +2,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Login from './components/Login';
 import Register from './components/Register';
 import DashboardPage from './components/DashboardPage';
-import './App.css';
 
 function App() {
   const isAuthenticated = () => {
