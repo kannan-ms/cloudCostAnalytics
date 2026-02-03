@@ -190,19 +190,71 @@ def bulk_ingest_costs(user_id: str, cost_records: List[Dict]) -> Tuple[bool, Dic
     success_count = 0
     error_count = 0
     errors = []
+    documents_to_insert = []
     inserted_ids = []
     
+    # First validation and document preparation pass
     for idx, record in enumerate(cost_records):
-        success, result = create_cost_record(user_id, record)
-        if success:
-            success_count += 1
-            inserted_ids.append(result)
-        else:
+        # Validate data
+        is_valid, error = validate_cost_data(record)
+        if not is_valid:
             error_count += 1
             errors.append({
                 "record_index": idx,
-                "error": result
+                "error": error
             })
+            continue
+
+        try:
+            # Parse dates
+            if isinstance(record['usage_start_date'], str):
+                usage_start_date = datetime.fromisoformat(record['usage_start_date'].replace('Z', '+00:00'))
+            else:
+                usage_start_date = record['usage_start_date']
+                
+            if isinstance(record['usage_end_date'], str):
+                usage_end_date = datetime.fromisoformat(record['usage_end_date'].replace('Z', '+00:00'))
+            else:
+                usage_end_date = record['usage_end_date']
+            
+            # Create document
+            document = {
+                "user_id": ObjectId(user_id),
+                "provider": record['provider'],
+                "cloud_account_id": record.get('cloud_account_id', ''),
+                "service_name": record['service_name'].strip(),
+                "resource_id": record.get('resource_id', ''),
+                "region": record.get('region', 'us-east-1'),
+                "usage_quantity": float(record.get('usage_quantity', 0)) if record.get('usage_quantity') else 0,
+                "usage_unit": record.get('usage_unit', ''),
+                "cost": float(record['cost']),
+                "currency": record.get('currency', 'USD'),
+                "usage_start_date": usage_start_date,
+                "usage_end_date": usage_end_date,
+                "billing_period": usage_start_date.strftime("%Y-%m"),
+                "tags": record.get('tags', {}),
+                "metadata": record.get('metadata', {}),
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            }
+            documents_to_insert.append(document)
+            
+        except Exception as e:
+            error_count += 1
+            errors.append({
+                "record_index": idx,
+                "error": f"Error parsing record: {str(e)}"
+            })
+
+    # Bulk insert if we have documents
+    if documents_to_insert:
+        try:
+            costs_collection = get_collection(Collections.CLOUD_COSTS)
+            result = costs_collection.insert_many(documents_to_insert)
+            success_count = len(result.inserted_ids)
+            inserted_ids = [str(id) for id in result.inserted_ids]
+        except Exception as e:
+            return False, {"error": f"Bulk insertion failed: {str(e)}"}
     
     return True, {
         "total_records": len(cost_records),

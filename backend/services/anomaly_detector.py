@@ -23,33 +23,54 @@ def delete_all_anomalies_for_user(user_id: str) -> bool:
         return False
 
 
-def calculate_service_average(user_id: str, service_name: str, days: int = 30) -> float:
+def get_reference_date(user_id: str) -> datetime:
+    """
+    Get the reference date for anomaly detection.
+    Uses the latest date in the user's data, or current time if no data exists.
+    """
+    try:
+        costs_collection = get_collection(Collections.CLOUD_COSTS)
+        latest = costs_collection.find_one(
+            {"user_id": ObjectId(user_id)},
+            sort=[("usage_start_date", -1)]
+        )
+        
+        if latest and "usage_start_date" in latest:
+            date_val = latest["usage_start_date"]
+            if isinstance(date_val, str):
+                # Handle simplified ISO format (YYYY-MM-DD) or full ISO
+                if "T" in date_val:
+                    return datetime.fromisoformat(date_val.replace("Z", "+00:00"))
+                else:
+                    return datetime.fromisoformat(date_val)
+            elif isinstance(date_val, datetime):
+                return date_val
+    except Exception as e:
+        print(f"Error getting reference date: {e}")
+        
+    return datetime.utcnow()
+
+
+def calculate_service_average(user_id: str, service_name: str, days: int = 30, reference_date: datetime = None) -> float:
     """
     Calculate average cost for a service over the last N days.
-    
-    Args:
-        user_id: User's ID
-        service_name: Service to analyze
-        days: Number of days to look back
-    
-    Returns:
-        Average daily cost
     """
     costs_collection = get_collection(Collections.CLOUD_COSTS)
     
-    end_date = datetime.utcnow()
+    if reference_date is None:
+        reference_date = get_reference_date(user_id)
+    
+    end_date = reference_date
     start_date = end_date - timedelta(days=days)
     
-    # Convert to ISO string format for comparison
-    start_date_str = start_date.date().isoformat()
-    end_date_str = end_date.date().isoformat()
+    # Ensure we compare using datetime objects, not strings
     
     pipeline = [
         {
             "$match": {
                 "user_id": ObjectId(user_id),
                 "service_name": service_name,
-                "usage_start_date": {"$gte": start_date_str, "$lte": end_date_str}
+                "usage_start_date": {"$gte": start_date, "$lte": end_date}
             }
         },
         {
@@ -69,27 +90,22 @@ def calculate_service_average(user_id: str, service_name: str, days: int = 30) -
     return 0.0
 
 
-def detect_cost_spike(user_id: str, threshold_multiplier: float = 2.0) -> List[Dict]:
+def detect_cost_spike(user_id: str, threshold_multiplier: float = 1.4) -> List[Dict]:
     """
     Detect cost spikes (current cost > threshold × average cost).
-    
-    Args:
-        user_id: User's ID
-        threshold_multiplier: Spike threshold (default: 2.0 = 200% of average)
-    
-    Returns:
-        List of detected anomalies
     """
     anomalies = []
     costs_collection = get_collection(Collections.CLOUD_COSTS)
     
-    # Get recent costs (last 7 days)
-    recent_date = datetime.utcnow() - timedelta(days=7)
-    recent_date_str = recent_date.date().isoformat()
+    # Use data-driven reference date
+    reference_date = get_reference_date(user_id)
+    
+    # Get recent costs (last 30 days from reference date) to scan the full potential period
+    recent_date = reference_date - timedelta(days=30)
     
     recent_costs = list(costs_collection.find({
         "user_id": ObjectId(user_id),
-        "usage_start_date": {"$gte": recent_date_str}
+        "usage_start_date": {"$gte": recent_date}
     }))
     
     # Group by service
@@ -102,8 +118,10 @@ def detect_cost_spike(user_id: str, threshold_multiplier: float = 2.0) -> List[D
     
     # Check each service
     for service, costs in service_costs.items():
-        # Calculate average for this service
-        avg_cost = calculate_service_average(user_id, service, days=30)
+        # Calculate average for this service using the data we already fetched
+        # This avoids N database queries
+        total_service_cost = sum(c['cost'] for c in costs)
+        avg_cost = total_service_cost / len(costs) if costs else 0
         
         if avg_cost == 0:
             continue
@@ -149,31 +167,24 @@ def detect_cost_spike(user_id: str, threshold_multiplier: float = 2.0) -> List[D
 def detect_new_services(user_id: str, lookback_days: int = 60) -> List[Dict]:
     """
     Detect newly appeared services that weren't used before.
-    
-    Args:
-        user_id: User's ID
-        lookback_days: Days to look back for historical comparison
-    
-    Returns:
-        List of detected anomalies
     """
     anomalies = []
     costs_collection = get_collection(Collections.CLOUD_COSTS)
     
+    reference_date = get_reference_date(user_id)
+    
     # Get recent services (last 7 days)
-    recent_date = datetime.utcnow() - timedelta(days=7)
-    recent_date_str = recent_date.date().isoformat()
+    recent_date = reference_date - timedelta(days=7)
     recent_services = costs_collection.distinct("service_name", {
         "user_id": ObjectId(user_id),
-        "usage_start_date": {"$gte": recent_date_str}
+        "usage_start_date": {"$gte": recent_date}
     })
     
     # Get historical services (before last 7 days)
-    historical_date = datetime.utcnow() - timedelta(days=lookback_days)
-    historical_date_str = historical_date.date().isoformat()
+    historical_date = reference_date - timedelta(days=lookback_days)
     historical_services = set(costs_collection.distinct("service_name", {
         "user_id": ObjectId(user_id),
-        "usage_start_date": {"$gte": historical_date_str, "$lt": recent_date_str}
+        "usage_start_date": {"$gte": historical_date, "$lt": recent_date}
     }))
     
     # Find new services
@@ -184,7 +195,7 @@ def detect_new_services(user_id: str, lookback_days: int = 60) -> List[Dict]:
         cost_entries = list(costs_collection.find({
             "user_id": ObjectId(user_id),
             "service_name": service,
-            "usage_start_date": {"$gte": recent_date_str}
+            "usage_start_date": {"$gte": recent_date}
         }).sort("usage_start_date", 1))
         
         if cost_entries:
@@ -215,27 +226,21 @@ def detect_new_services(user_id: str, lookback_days: int = 60) -> List[Dict]:
 def detect_continuous_increase(user_id: str, days: int = 3) -> List[Dict]:
     """
     Detect services with continuous cost increases over N consecutive days.
-    
-    Args:
-        user_id: User's ID
-        days: Number of consecutive days to check
-    
-    Returns:
-        List of detected anomalies
     """
     anomalies = []
     costs_collection = get_collection(Collections.CLOUD_COSTS)
     
-    # Get costs for the last 10 days
-    recent_date = datetime.utcnow() - timedelta(days=10)
-    recent_date_str = recent_date.date().isoformat()
+    reference_date = get_reference_date(user_id)
+    
+    # Get costs for the last 30 days
+    recent_date = reference_date - timedelta(days=30)
     
     # Group by service and date  
     pipeline = [
         {
             "$match": {
                 "user_id": ObjectId(user_id),
-                "usage_start_date": {"$gte": recent_date_str}
+                "usage_start_date": {"$gte": recent_date}
             }
         },
         {
@@ -298,7 +303,7 @@ def detect_continuous_increase(user_id: str, days: int = 3) -> List[Dict]:
                         "type": "continuous_increase",
                         "message": f"Continuous cost increase for {service}: ${first_cost:.2f} → ${last_cost:.2f} over {days} days ({increase_pct:.1f}% increase)",
                         "recommendation": generate_continuous_increase_recommendation(service, increase_pct),
-                        "detected_at": datetime.utcnow(),
+                        "detected_at": window[-1][0],
                         "region": "N/A",
                         "resource_id": "N/A"
                     }
@@ -348,7 +353,7 @@ def run_anomaly_detection_for_user(user_id: str) -> Tuple[bool, any]:
         all_anomalies = []
         
         # Run all detection rules
-        spike_anomalies = detect_cost_spike(user_id, threshold_multiplier=2.0)
+        spike_anomalies = detect_cost_spike(user_id, threshold_multiplier=1.4)
         new_service_anomalies = detect_new_services(user_id)
         continuous_increase_anomalies = detect_continuous_increase(user_id, days=3)
         
@@ -359,18 +364,27 @@ def run_anomaly_detection_for_user(user_id: str) -> Tuple[bool, any]:
         # Store anomalies in database
         anomalies_collection = get_collection(Collections.ANOMALIES)
         
-        stored_count = 0
+        # Reference date for deduplication check window
+        reference_date = get_reference_date(user_id)
+        dedup_start_date = reference_date - timedelta(days=7)
+        
+        # 1. Fetch existing anomalies in bulk to avoid N queries
+        existing_anomalies = list(anomalies_collection.find({
+            "user_id": ObjectId(user_id),
+            "status": {"$in": ["new", "acknowledged"]},
+            "detected_at": {"$gte": dedup_start_date}
+        }, {"service_name": 1, "type": 1}))
+        
+        # Create a set of (service_name, type) for fast lookup
+        existing_keys = set((a['service_name'], a['type']) for a in existing_anomalies)
+
+        documents_to_insert = []
+        
         for anomaly in all_anomalies:
-            # Check if similar anomaly already exists (avoid duplicates)
-            existing = anomalies_collection.find_one({
-                "user_id": ObjectId(user_id),
-                "service_name": anomaly['service_name'],
-                "type": anomaly['type'],
-                "status": {"$in": ["new", "acknowledged"]},
-                "detected_at": {"$gte": datetime.utcnow() - timedelta(days=7)}
-            })
+            # Check if similar anomaly already exists (deduplication)
+            key = (anomaly['service_name'], anomaly['type'])
             
-            if not existing:
+            if key not in existing_keys:
                 anomaly_doc = Anomaly.create_document(
                     user_id=anomaly['user_id'],
                     cost_id=anomaly['cost_id'] or "000000000000000000000000",
@@ -379,7 +393,8 @@ def run_anomaly_detection_for_user(user_id: str) -> Tuple[bool, any]:
                     expected_value=anomaly['expected_value'],
                     threshold=anomaly['threshold'],
                     severity=anomaly['severity'],
-                    message=anomaly['message']
+                    message=anomaly['message'],
+                    detected_at=anomaly.get('detected_at')
                 )
                 
                 # Add extra fields
@@ -388,8 +403,14 @@ def run_anomaly_detection_for_user(user_id: str) -> Tuple[bool, any]:
                 anomaly_doc['region'] = anomaly['region']
                 anomaly_doc['resource_id'] = anomaly['resource_id']
                 
-                anomalies_collection.insert_one(anomaly_doc)
-                stored_count += 1
+                documents_to_insert.append(anomaly_doc)
+                # Add to set to prevent duplicates within the same batch
+                existing_keys.add(key)
+        
+        stored_count = 0
+        if documents_to_insert:
+            result = anomalies_collection.insert_many(documents_to_insert)
+            stored_count = len(result.inserted_ids)
         
         return True, {
             "total_detected": len(all_anomalies),

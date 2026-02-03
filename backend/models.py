@@ -108,7 +108,8 @@ class Anomaly:
         expected_value: float,
         threshold: float,
         severity: str,
-        message: str
+        message: str,
+        detected_at: datetime = None
     ) -> Dict:
         """
         Create a new anomaly document.
@@ -122,6 +123,7 @@ class Anomaly:
             threshold: Anomaly detection threshold
             severity: 'low', 'medium', or 'high'
             message: Description of the anomaly
+            detected_at: Timestamp of detection (defaults to utcnow)
             
         Returns:
             Dict: Anomaly document ready for MongoDB insertion
@@ -136,7 +138,7 @@ class Anomaly:
             "deviation_percentage": ((detected_value - expected_value) / expected_value * 100),
             "severity": severity,
             "message": message,
-            "detected_at": datetime.utcnow(),
+            "detected_at": detected_at or datetime.utcnow(),
             "status": "new",  # 'new', 'acknowledged', 'resolved', 'ignored'
             "acknowledged_at": None,
             "resolved_at": None
