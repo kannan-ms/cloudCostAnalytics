@@ -1,244 +1,151 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  ArcElement,
-  Title,
+  AreaChart, Area,
+  BarChart, Bar,
+  LineChart, Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
   Tooltip,
-  Legend,
-  Filler
-} from 'chart.js';
-import { Bar, Line, Doughnut, Pie } from 'react-chartjs-2';
+  ResponsiveContainer,
+  Legend
+} from 'recharts';
+import { CHART_COLORS, ChartGradients, XAxisProps, YAxisProps, GridProps } from '../utils/chartConfig.jsx';
+import SmartTooltip from './Charts/SmartTooltip';
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-);
+const CostChart = ({ costs, chartType = 'bar', viewMode = 'daily' }) => {
+  const [hoveredSeries, setHoveredSeries] = useState(null);
 
-const CostChart = ({ costs, chartType = 'bar', onBarClick }) => {
-  const chartTrends = costs.trends || [];
-  
-  // 1. Prepare Labels (Dates)
-  const labels = chartTrends.map(t => {
-      // Use 'date' if available (from dashboard mapping) or 'period' directly
-      const d = t.date || t.period;
-      return new Date(d).toLocaleDateString('en-US', { day: '2-digit', month: 'short' });
-  });
+  // 1. Transform Data for Recharts
+  // Input: { trends: [{ period: '2023-01-01', Breakdown: [...] }, ...] }
+  // Output: [{ date: 'Jan 01', 'Service A': 100, 'Service B': 200 }, ...]
 
-  // 2. Identify Unique Services across all time periods
-  const allServices = new Set();
-  chartTrends.forEach(t => {
+  const { chartData, serviceNames } = useMemo(() => {
+    if (!costs || !costs.trends) return { chartData: [], serviceNames: [] };
+
+    const services = new Set();
+    let cumulativeTotals = {};
+
+    const data = costs.trends.map(t => {
+      const dateStr = new Date(t.date || t.period).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const point = { date: dateStr, _originalDate: t.period }; // Keep original date for actions
+
       if (t.breakdown) {
-          t.breakdown.forEach(b => allServices.add(b.service_name));
-      }
-  });
-  const serviceList = Array.from(allServices);
-
-  // 3. Assign Colors dynamically (Slate/Blue Theme Palette)
-  const colors = [
-      '#3b82f6', // blue-500
-      '#10b981', // emerald-500
-      '#f59e0b', // amber-500
-      '#ef4444', // red-500
-      '#8b5cf6', // violet-500
-      '#ec4899', // pink-500
-      '#6366f1', // indigo-500
-      '#06b6d4', // cyan-500
-  ];
-
-  // --- Data Preparation for Time Series (Bar, Line, Area) ---
-  const timeSeriesDatasets = serviceList.map((serviceName, index) => {
-      return {
-          label: serviceName,
-          data: chartTrends.map(t => {
-              const item = t.breakdown?.find(b => b.service_name === serviceName);
-              return item ? item.cost : 0;
-          }),
-          backgroundColor: colors[index % colors.length],
-          borderColor: colors[index % colors.length],
-          borderWidth: 1,
-          barThickness: 'flex', // Adaptive bar thickness
-          maxBarThickness: 32,
-          borderRadius: 4,
-          // For Line/Area charts
-          pointRadius: 3,
-          pointBackgroundColor: '#fff',
-          pointBorderColor: colors[index % colors.length],
-          pointBorderWidth: 2,
-          tension: 0.4,
-          fill: chartType === 'area' ? 'origin' : false, 
-      };
-  });
-
-  const finalTimeSeriesDatasets = timeSeriesDatasets.length > 0 ? timeSeriesDatasets : [
-      {
-          label: 'Total Cost',
-          data: chartTrends.map(t => t.total_cost),
-          backgroundColor: '#3b82f6',
-          borderColor: '#3b82f6',
-          borderWidth: 1,
-          barThickness: 'flex',
-          maxBarThickness: 32,
-          fill: chartType === 'area',
-      }
-  ];
-
-  const timeSeriesData = {
-    labels,
-    datasets: finalTimeSeriesDatasets,
-  };
-
-  // --- Data Preparation for Aggregated Distribution (Doughnut, Pie) ---
-  // Sum up costs per service across ALL time periods
-  const aggregatedData = serviceList.map(serviceName => {
-      let total = 0;
-      chartTrends.forEach(t => {
-          const item = t.breakdown?.find(b => b.service_name === serviceName);
-          if (item) total += item.cost;
-      });
-      return total;
-  });
-
-  const distributionData = {
-      labels: serviceList,
-      datasets: [{
-          data: aggregatedData,
-          backgroundColor: colors.slice(0, serviceList.length),
-          borderColor: '#ffffff',
-          borderWidth: 2,
-      }]
-  };
-
-
-  // --- Options Configuration ---
-  const commonOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: true,
-        position: 'bottom',
-        labels: { 
-            usePointStyle: true,
-            boxWidth: 8, 
-            padding: 20,
-            font: { family: "'Inter', sans-serif", size: 11 },
-            color: '#64748b' // slate-500
-        }
-      },
-      tooltip: {
-        backgroundColor: '#1e293b', // slate-800
-        padding: 12,
-        titleFont: { family: "'Inter', sans-serif", size: 13, weight: '600' },
-        bodyFont: { family: "'Inter', sans-serif", size: 12 },
-        cornerRadius: 8,
-        displayColors: true,
-        boxPadding: 4,
-        callbacks: {
-          label: (context) => ` ${context.dataset.label || context.label}: $${context.raw.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
-        }
-      },
-      title: {
-          display: false
-      }
-    },
-    onClick: (event, elements) => {
-      if (elements && elements.length > 0 && (chartType === 'bar' || chartType === 'line' || chartType === 'area')) {
-        const index = elements[0].index;
-        const rawDate = chartTrends[index]?.date || chartTrends[index]?.period;
-        if (onBarClick && rawDate) onBarClick(rawDate);
-      }
-    }
-  };
-
-  const scaleOptions = {
-      ...commonOptions,
-      scales: {
-        x: {
-          stacked: chartType === 'bar' || chartType === 'area', 
-          grid: { display: false, drawBorder: false },
-          ticks: { 
-              font: { family: "'Inter', sans-serif", size: 11 }, 
-              color: '#94a3b8', // slate-400
-              maxRotation: 0,
-              autoSkip: true,
-              maxTicksLimit: 12
-          },
-          border: { display: false }
-        },
-        y: {
-          stacked: chartType === 'bar' || chartType === 'area',
-          grid: { color: '#f1f5f9', borderDash: [4, 4], drawBorder: false }, // slate-100
-          ticks: { 
-              font: { family: "'Inter', sans-serif", size: 11 }, 
-              color: '#94a3b8', // slate-400
-              callback: (value) => `$${value}` 
-            },
-          beginAtZero: true,
-          border: { display: false }
-        },
-      },
-  };
-
-  const pieOptions = {
-      ...commonOptions,
-      plugins: {
-          ...commonOptions.plugins,
-          legend: { 
-              position: 'right',
-              labels: {
-                  usePointStyle: true,
-                  boxWidth: 8,
-                  padding: 15,
-                  font: { family: "'Inter', sans-serif", size: 11 },
-                  color: '#64748b'
-              }
+        t.breakdown.forEach(b => {
+          services.add(b.service_name);
+          // For cumulative, add to running total
+          if (viewMode === 'cumulative') {
+            cumulativeTotals[b.service_name] = (cumulativeTotals[b.service_name] || 0) + b.cost;
+            point[b.service_name] = cumulativeTotals[b.service_name];
+          } else {
+            point[b.service_name] = b.cost;
           }
-      },
-      cutout: chartType === 'doughnut' ? '70%' : undefined
+        });
+      } else {
+        // Fallback if no breakdown
+        services.add('Total Cost');
+        if (viewMode === 'cumulative') {
+          cumulativeTotals['Total Cost'] = (cumulativeTotals['Total Cost'] || 0) + t.total_cost;
+          point['Total Cost'] = cumulativeTotals['Total Cost'];
+        } else {
+          point['Total Cost'] = t.total_cost;
+        }
+      }
+      return point;
+    });
+
+    return { chartData: data, serviceNames: Array.from(services) };
+  }, [costs, viewMode]);
+
+  // 2. Render Check
+  if (!chartData || chartData.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full text-slate-400 text-sm">
+        No data available for this range.
+      </div>
+    );
+  }
+
+  // 3. Dynamic Series Generation
+  const renderSeries = () => {
+    const colorKeys = Object.keys(CHART_COLORS).filter(k => k !== 'grid' && k !== 'text' && k !== 'gray');
+
+    return serviceNames.map((service, index) => {
+      const color = CHART_COLORS[colorKeys[index % colorKeys.length]];
+      const isDimmed = hoveredSeries && hoveredSeries !== service;
+      const opacity = isDimmed ? 0.1 : 1;
+      const strokeWidth = hoveredSeries === service ? 3 : 2;
+
+      if (chartType === 'line') {
+        return (
+          <Line
+            key={service}
+            type="monotone"
+            dataKey={service}
+            stroke={color}
+            strokeWidth={strokeWidth}
+            strokeOpacity={opacity}
+            dot={false}
+            activeDot={{ r: 6, strokeWidth: 0 }}
+          />
+        );
+      }
+
+      if (chartType === 'area') {
+        return (
+          <Area
+            key={service}
+            type="monotone"
+            dataKey={service}
+            stroke={color}
+            strokeWidth={strokeWidth}
+            fill={`url(#color${index % 2 === 0 ? 'Primary' : 'Secondary'})`} // Cycle gradients
+            fillOpacity={isDimmed ? 0.05 : 0.3}
+            strokeOpacity={opacity}
+            stackId="1"
+          />
+        );
+      }
+
+      // Default Bar
+      return (
+        <Bar
+          key={service}
+          dataKey={service}
+          fill={color}
+          fillOpacity={isDimmed ? 0.2 : 0.9}
+          radius={[4, 4, 0, 0]}
+          stackId="a"
+          maxBarSize={50}
+        />
+      );
+    });
   };
 
-  // --- Render Chart based on Type ---
-  if (chartType === 'line' || chartType === 'area') {
-      return (
-        <div className="w-full h-full">
-          <Line data={timeSeriesData} options={scaleOptions} />
-        </div>
-      );
-  }
-  
-  if (chartType === 'doughnut') {
-      return (
-        <div className="w-full h-full relative">
-             <Doughnut data={distributionData} options={pieOptions} />
-        </div>
-      );
-  }
+  const ChartComponent = chartType === 'line' ? LineChart : (chartType === 'area' ? AreaChart : BarChart);
 
-  if (chartType === 'pie') {
-      return (
-        <div className="w-full h-full relative">
-             <Pie data={distributionData} options={pieOptions} />
-        </div>
-      );
-  }
-
-  // Default to Bar (Stacked)
   return (
-    <div className="w-full h-full">
-      <Bar data={timeSeriesData} options={scaleOptions} />
+    <div className="w-full h-full relative" onMouseLeave={() => setHoveredSeries(null)}>
+      <ResponsiveContainer width="100%" height="100%">
+        <ChartComponent data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          {/* Gradients */}
+          <ChartGradients />
+
+          <CartesianGrid {...GridProps} />
+          <XAxis dataKey="date" {...XAxisProps} />
+          <YAxis {...YAxisProps} />
+          <Tooltip content={<SmartTooltip />} cursor={{ fill: '#f1f5f9', opacity: 0.5 }} />
+
+          <Legend
+            onMouseEnter={(e) => setHoveredSeries(e.value)}
+            onMouseLeave={() => setHoveredSeries(null)}
+            iconType="circle"
+            wrapperStyle={{ paddingTop: '20px' }}
+          />
+
+          {renderSeries()}
+        </ChartComponent>
+      </ResponsiveContainer>
     </div>
   );
 };

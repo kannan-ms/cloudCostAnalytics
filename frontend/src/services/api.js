@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5000/api';
+// Get API URL from enviroment or default to local
+const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -10,7 +11,7 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+    config.headers.Authorization = `Bearer ${token}`; // Use Bearer scheme and string
   }
   return config;
 });
@@ -36,12 +37,22 @@ api.getDailyTrends = (startDate, endDate) => {
   if (endDate) params.end_date = endDate;
   return api.get('/costs/trends/daily', { params });
 };
+// Updated to simpler endpoints
+api.getSummary = () => api.get('/summary'); // Assuming backend provides /api/summary for dashboard overview
+api.getTrends = () => api.get('/costs/trends'); // General trends endpoint
 
-api.getAutoTrends = () => {
-  return api.get('/costs/trends/auto');
+api.getAnomalies = () => api.get('/anomalies');
+api.getCostSummary = () => api.get('/costs/summary');
+
+api.getForecasts = (days = 30, detailed = false, options = {}) => {
+  const params = { days, detailed, ...options };
+  return api.get('/forecasts', { params });
 };
 
-api.getAnomalies = () => api.get('/anomalies'); // Assuming this exists based on context
-api.getCostSummary = () => api.get('/costs/summary');
+// Budget Endpoints
+api.getBudgets = () => api.get('/budgets');
+api.createBudget = (data) => api.post('/budgets', data);
+api.getBudgetDetails = (id) => api.get(`/budgets/${id}`);
+api.deleteBudget = (id) => api.delete(`/budgets/${id}`);
 
 export default api;

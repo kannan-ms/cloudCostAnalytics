@@ -10,7 +10,7 @@ from database import Database, create_indexes
 from routes.auth_routes import auth_routes
 from routes.cost_routes import cost_routes
 from routes.anomaly_routes import anomaly_routes
-from services.simple_cost_trends import parse_and_store_csv, get_monthly_cost_trends
+from routes.forecast_routes import forecast_routes
 
 
 def create_app(config=Config):
@@ -48,6 +48,9 @@ def create_app(config=Config):
     app.register_blueprint(auth_routes)
     app.register_blueprint(cost_routes)
     app.register_blueprint(anomaly_routes)
+    app.register_blueprint(forecast_routes)
+    from routes.budget_routes import budget_routes
+    app.register_blueprint(budget_routes)
     
     # Root endpoint
     @app.route('/', methods=['GET'])
@@ -89,49 +92,6 @@ def create_app(config=Config):
             ]
         }), 200
 
-    @app.route('/upload-cost-data', methods=['POST'])
-    def upload_cost_data():
-        """
-        CSV upload endpoint for simple cost trends.
-
-        Requirements:
-        - Accepts a CSV file upload
-        - Validates required columns:
-          provider, service_name, cost, usage_start_date, usage_end_date
-        - Validates date format YYYY-MM-DD
-        - Validates cost is numeric
-        - Stores raw rows in `cost_records` collection
-        """
-        if 'file' not in request.files:
-            return jsonify({"error": "No file part in request. Use form-data with key 'file'."}), 400
-
-        file = request.files['file']
-
-        success, payload = parse_and_store_csv(file)
-        if not success:
-            return jsonify(payload), 400
-
-        return jsonify({
-            "success": True,
-            **payload
-        }), 201
-
-    @app.route('/api/cost-trends', methods=['GET'])
-    def cost_trends():
-        """
-        Get monthly cost trends based on data in `cost_records`.
-
-        Response format:
-        {
-            "labels": ["2024-01", "2024-02", ...],
-            "values": [15420, 17890, ...]
-        }
-
-        Handles empty datasets gracefully by returning empty arrays.
-        """
-        trends = get_monthly_cost_trends()
-        return jsonify(trends), 200
-    
     @app.route('/api/health', methods=['GET'])
     def health_check():
         """Health check endpoint to verify API and database status."""

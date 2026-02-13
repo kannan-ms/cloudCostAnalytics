@@ -73,31 +73,24 @@ class Database:
             
         except ValueError as e:
             logger.error(f"Configuration error: {e}")
+            print(f"Error: {e}")
             logger.error("Please check your MONGODB_URI in the .env file")
             return False
         except ConnectionFailure as e:
             logger.error(f"Failed to connect to MongoDB: {e}")
-            logger.error("Possible causes:")
-            logger.error("  1. Incorrect username or password")
-            logger.error("  2. IP address not whitelisted in MongoDB Atlas Network Access")
-            logger.error("  3. Connection string format is incorrect")
-            logger.error("  4. Password contains special characters that need URL encoding")
+            print(f"ConnectionFailure: {e}")
             return False
         except ServerSelectionTimeoutError as e:
             logger.error(f"MongoDB server selection timeout: {e}")
-            logger.error("Possible causes:")
-            logger.error("  1. Network connectivity issues")
-            logger.error("  2. IP address not whitelisted in MongoDB Atlas")
-            logger.error("  3. Firewall blocking the connection")
-            logger.error("  4. Incorrect cluster address in connection string")
+            print(f"ServerSelectionTimeoutError: {e}")
             return False
         except ConfigurationError as e:
             logger.error(f"MongoDB configuration error: {e}")
-            logger.error("Please check your connection string format")
+            print(f"ConfigurationError: {e}")
             return False
         except Exception as e:
             logger.error(f"Unexpected error connecting to MongoDB: {e}")
-            logger.error(f"Error type: {type(e).__name__}")
+            print(f"Unexpected error: {e}")
             return False
     
     @staticmethod
@@ -123,6 +116,7 @@ class Collections:
     ANOMALIES = "anomalies"
     USAGE_METRICS = "usage_metrics"
     ALERTS = "alerts"
+    BUDGETS = "budgets"
 
 
 def get_collection(collection_name):
@@ -186,6 +180,12 @@ def create_indexes():
         ])
         db[Collections.ALERTS].create_index("is_read")
         
+        # Budget collection indexes
+        db[Collections.BUDGETS].create_index([
+            ("user_id", 1),
+            ("created_at", -1)
+        ])
+
         return True
         
     except Exception as e:

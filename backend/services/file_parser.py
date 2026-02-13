@@ -64,7 +64,9 @@ def parse_date(date_value: Any) -> Optional[datetime]:
             '%Y-%m-%dT%H:%M:%S',
             '%Y-%m-%dT%H:%M:%SZ',
             '%m-%d-%Y',
-            '%d-%m-%Y'
+            '%d-%m-%Y',
+            '%d-%m-%Y %H:%M',   # Added for GCP format: 01-08-2024 22:24
+            '%m-%d-%Y %H:%M'
         ]
         
         for fmt in date_formats:
@@ -94,15 +96,15 @@ def map_columns(headers: List[str]) -> Dict[str, str]:
     field_mappings = {
         'provider': ['provider', 'cloud_provider', 'cloud', 'vendor'],
         'cloud_account_id': ['cloud_account_id', 'account_id', 'account', 'account_number'],
-        'service_name': ['service_name', 'service', 'product', 'product_name', 'resource_type'],
-        'resource_id': ['resource_id', 'resource', 'instance_id', 'instance'],
-        'region': ['region', 'location', 'availability_zone', 'zone'],
+        'service_name': ['service_name', 'service', 'product', 'product_name', 'resource_type', 'service_description', 'sku_description', 'metercategory', 'consumedservice'],
+        'resource_id': ['resource_id', 'resource', 'instance_id', 'instance', 'resourcename'],
+        'region': ['region', 'location', 'availability_zone', 'zone', 'region/zone', 'resourcelocation'],
         'usage_quantity': ['usage_quantity', 'quantity', 'usage', 'amount'],
         'usage_unit': ['usage_unit', 'unit', 'measurement_unit'],
-        'cost': ['cost', 'charge', 'amount', 'price', 'total_cost', 'billed_cost'],
+        'cost': ['cost', 'charge', 'amount', 'price', 'total_cost', 'billed_cost', 'unrounded_cost_($)', 'rounded_cost_($)', 'total_cost_(inr)', 'costinbillingcurrency'],
         'currency': ['currency', 'currency_code'],
-        'usage_start_date': ['usage_start_date', 'start_date', 'from_date', 'begin_date', 'period_start'],
-        'usage_end_date': ['usage_end_date', 'end_date', 'to_date', 'finish_date', 'period_end'],
+        'usage_start_date': ['usage_start_date', 'start_date', 'from_date', 'begin_date', 'period_start', 'usage_start_time', 'start_time', 'date', 'usage_date'],
+        'usage_end_date': ['usage_end_date', 'end_date', 'to_date', 'finish_date', 'period_end', 'usage_end_time', 'end_time'],
         'tags': ['tags', 'labels', 'metadata'],
     }
     
@@ -225,7 +227,8 @@ def extract_cost_records(rows: List[Dict[str, Any]], column_mapping: Dict[str, s
                 record['tags'] = tags
             
             # Only add record if it has required fields
-            if all(k in record for k in ['provider', 'service_name', 'cost', 'usage_start_date', 'usage_end_date']):
+            # provider removed from strict check as it can be inferred later
+            if all(k in record for k in ['service_name', 'cost', 'usage_start_date']):
                 records.append(record)
         
         except Exception:
