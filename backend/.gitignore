@@ -24,3 +24,5 @@ wheels/
 .env
 .DS_Store
 data/
+dataSet/
+*.csv
