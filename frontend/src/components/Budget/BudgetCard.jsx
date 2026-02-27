@@ -27,7 +27,7 @@ const BudgetCard = ({ budgetData, onDelete }) => {
     const forecastWidth = Math.min((total_projected / budget.amount) * 100, 100);
 
     return (
-        <div className={`bg-white rounded-xl shadow-sm border ${borderColor} p-6 relative group transition-all hover:shadow-md`}>
+        <div className={`bg-white rounded-lg shadow-sm border ${borderColor} p-6 relative group transition-shadow hover:shadow`}>
             {/* Delete Button (visible on hover) */}
             <button
                 onClick={() => onDelete(budget.id)}

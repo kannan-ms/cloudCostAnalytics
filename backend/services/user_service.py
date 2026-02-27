@@ -8,7 +8,7 @@ import jwt
 from datetime import datetime, timedelta
 from bson import ObjectId
 from database import get_collection, Collections
-from models import User
+from schemas import User
 from config import Config
 
 

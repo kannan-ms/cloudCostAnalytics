@@ -21,7 +21,7 @@ const Reports = () => {
         <div className="p-8 max-w-7xl mx-auto">
             <div className="flex justify-between items-end mb-8">
                  <div>
-                    <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Generated Reports</h2>
+                    <h2 className="text-2xl font-bold text-slate-900">Generated Reports</h2>
                     <p className="text-slate-500 mt-1">Access and download your historical cost analysis.</p>
                 </div>
             </div>
@@ -39,13 +39,13 @@ const Reports = () => {
                         <div key={idx} className="grid grid-cols-[auto_1fr_auto] items-center gap-4 px-6 py-4 border-b border-slate-100 last:border-b-0 hover:bg-slate-50/80 transition-colors group">
                             
                             {/* Icon */}
-                            <div className="p-3 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-100 transition-colors">
+                            <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
                                 <Icon size={20} />
                             </div>
 
                             {/* Content */}
                             <div>
-                                <h4 className="font-semibold text-slate-800 text-sm group-hover:text-blue-700 transition-colors cursor-pointer">{report.name}</h4>
+                                <h4 className="font-semibold text-slate-800 text-sm">{report.name}</h4>
                                 <div className="flex items-center gap-3 mt-1.5">
                                     <span className="flex items-center gap-1 text-xs text-slate-400 font-medium">
                                         <Clock size={12} />

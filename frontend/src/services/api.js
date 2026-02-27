@@ -43,7 +43,12 @@ api.getTrends = () => api.get('/costs/trends'); // General trends endpoint
 
 api.getAnomalies = () => api.get('/anomalies');
 api.getCostSummary = () => api.get('/costs/summary');
+api.getDashboardInsights = () => api.get('/costs/dashboard-insights');
 
+// Category-level daily trends for a single month
+api.getCategoryDailyTrends = (month) => api.get('/costs/trends/category-daily', { params: { month } });
+
+//getForecasts for 30 days
 api.getForecasts = (days = 30, detailed = false, options = {}) => {
   const params = { days, detailed, ...options };
   return api.get('/forecasts', { params });
@@ -54,5 +59,26 @@ api.getBudgets = () => api.get('/budgets');
 api.createBudget = (data) => api.post('/budgets', data);
 api.getBudgetDetails = (id) => api.get(`/budgets/${id}`);
 api.deleteBudget = (id) => api.delete(`/budgets/${id}`);
+
+// Ingestion / CSP Integration Endpoints
+api.ingestFromApi = (provider, credentials, startDate, endDate) =>
+  api.post('/ingestion/api', { provider, credentials, start_date: startDate, end_date: endDate });
+
+api.ingestFromFile = (provider, file) => {
+  const form = new FormData();
+  form.append('provider', provider);
+  form.append('file', file);
+  return api.post('/ingestion/file', form);
+};
+
+api.ingestAndDetect = (provider, file) => {
+  const form = new FormData();
+  form.append('source_type', 'file');
+  form.append('provider', provider);
+  form.append('file', file);
+  return api.post('/ingestion/detect', form);
+};
+
+api.getCategories = () => api.get('/ingestion/categories');
 
 export default api;

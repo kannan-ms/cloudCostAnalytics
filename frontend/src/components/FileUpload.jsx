@@ -76,7 +76,13 @@ const FileUpload = ({ onUploadSuccess, onSwitchToOverview }) => {
         }, 500);
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to upload file. Please try again.');
+      if (err.response?.data?.error) {
+        setError(err.response.data.error);
+      } else if (err.code === 'ERR_NETWORK' || !err.response) {
+        setError('Could not reach the server. Please make sure the backend is running and try again.');
+      } else {
+        setError(`Upload failed (${err.response?.status || 'unknown'}). Please try again.`);
+      }
     } finally {
       setUploading(false);
     }
@@ -174,7 +180,7 @@ const FileUpload = ({ onUploadSuccess, onSwitchToOverview }) => {
       )}
 
       {uploadResult && (
-        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <div className="space-y-4">
              <div
             className={`p-5 rounded-xl border ${
                 uploadResult.error_count > 0
@@ -269,11 +275,15 @@ const FileUpload = ({ onUploadSuccess, onSwitchToOverview }) => {
         <ul className="space-y-2 text-xs text-slate-600">
           <li className="flex items-start gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5"></div>
-            <span><strong>Required:</strong> provider, service_name, cost, usage_start_date</span>
+            <span><strong>Required:</strong> service_name, cost, date column</span>
           </li>
           <li className="flex items-start gap-2">
              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5"></div>
-            <span><strong>Date format:</strong> YYYY-MM-DD (e.g., 2026-01-01)</span>
+            <span><strong>Optional:</strong> provider, region, usage_end_date (auto-detected if missing)</span>
+          </li>
+          <li className="flex items-start gap-2">
+             <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5"></div>
+            <span><strong>Supported formats:</strong> Custom CSV, Azure/AWS/GCP billing exports</span>
           </li>
         </ul>
       </div>

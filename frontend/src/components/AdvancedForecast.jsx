@@ -77,7 +77,7 @@ const AdvancedForecast = () => {
     if (!data) return null;
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-6">
             {/* Controls Bar */}
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap gap-4 items-center justify-between">
                 <div className="flex items-center gap-4 flex-wrap">
@@ -155,7 +155,7 @@ const AdvancedForecast = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                 {/* Multi-Line Service Comparison */}
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                     <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
                         <Layers size={18} className="text-blue-500" />
                         Service Comparison (Projected)
@@ -187,7 +187,7 @@ const AdvancedForecast = () => {
                 </div>
 
                 {/* Stacked Growth Chart */}
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                     <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
                         <Activity size={18} className="text-green-500" />
                         Total Forecast Composition

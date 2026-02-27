@@ -3,7 +3,7 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import { logout } from '../../services/authService';
 
-const MainLayout = ({ children, onUploadClick, globalFilters, onGlobalFilterChange }) => {
+const MainLayout = ({ children, onUploadClick, globalFilters, onGlobalFilterChange, currentView }) => {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
 
   return (
@@ -17,6 +17,7 @@ const MainLayout = ({ children, onUploadClick, globalFilters, onGlobalFilterChan
             onUploadClick={onUploadClick} 
             onLogout={logout} 
             user={user}
+            currentView={currentView}
         />
         <main className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth">
           {children}

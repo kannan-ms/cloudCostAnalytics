@@ -62,7 +62,7 @@ const Budgets = () => {
             <div className="flex justify-between items-center mb-8">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Budget Management</h1>
-                    <p className="text-gray-500 mt-1">Track spend and get forecasted alerts.</p>
+                    <p className="text-gray-500 mt-1">Set limits and track spending by service or project.</p>
                 </div>
                 <button
                     onClick={() => setIsModalOpen(true)}

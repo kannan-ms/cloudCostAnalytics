@@ -80,8 +80,8 @@ const DrillDownView = ({ month, onBack }) => {
 
     if (loading) return (
          <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-4 py-20">
-            <Loader2 size={40} className="animate-spin text-blue-500" />
-            <p className="font-medium text-slate-500">Retrieving monthly details...</p>
+            <Loader2 size={32} className="animate-spin text-blue-500" />
+            <p className="text-sm text-slate-500">Loading monthly details...</p>
         </div>
     );
     

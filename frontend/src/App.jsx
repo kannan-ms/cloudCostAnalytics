@@ -49,6 +49,30 @@ function App() {
             </PrivateRoute>
           }
         />
+        <Route
+          path="/service-analysis"
+          element={
+            <PrivateRoute>
+              <DashboardPage view="service-analysis" />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/anomalies"
+          element={
+            <PrivateRoute>
+              <DashboardPage view="anomalies" />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/integrations"
+          element={
+            <PrivateRoute>
+              <DashboardPage view="integrations" />
+            </PrivateRoute>
+          }
+        />
         <Route path="/" element={<Navigate to="/dashboard" />} />
       </Routes>
     </Router>

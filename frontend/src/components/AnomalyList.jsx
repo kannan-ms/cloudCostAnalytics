@@ -5,11 +5,11 @@ const AnomalyList = ({ anomalies }) => {
   if (!anomalies || anomalies.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-4 py-12">
-        <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center">
-            <CheckCircle size={32} className="text-green-500" />
+        <div className="w-14 h-14 bg-green-50 rounded-full flex items-center justify-center">
+            <CheckCircle size={28} className="text-green-500" />
         </div>
         <div className="text-center">
-            <h3 className="font-semibold text-slate-700 text-lg">System Healthy</h3>
+            <h3 className="font-semibold text-slate-700">No Anomalies Found</h3>
             <p className="text-sm text-slate-500 mt-1">No cost anomalies detected in the selected period.</p>
         </div>
       </div>
@@ -59,7 +59,7 @@ const AnomalyList = ({ anomalies }) => {
         const Icon = style.icon;
 
         return (
-          <div key={index} className={`rounded-xl border ${style.border} bg-white p-5 shadow-sm hover:shadow-md transition-all group`}>
+          <div key={index} className={`rounded-lg border ${style.border} bg-white p-5 shadow-sm hover:shadow transition-shadow`}>
             {/* Header */}
             <div className="flex justify-between items-start mb-3">
               <div className="flex items-center gap-2">

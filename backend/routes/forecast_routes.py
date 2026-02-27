@@ -56,14 +56,14 @@ def get_forecast(current_user_id):
         if detailed_view:
             result = forecast_service.get_detailed_forecast(
                 current_user_id, 
-                days_ahead=days_ahead
+                periods_ahead=days_ahead,
+                filters=filters if filters else None
             )
         else:
-            service_name = filters.get('service') if filters else None
             result = forecast_service.predict_future_costs(
                 current_user_id, 
-                days_ahead=days_ahead,
-                service_name=service_name
+                periods_ahead=days_ahead,
+                filters=filters if filters else None
             )
         
         if result.get("error"):

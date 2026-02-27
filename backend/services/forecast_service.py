@@ -53,8 +53,7 @@ def _train_and_predict_prophet(df: pd.DataFrame, periods_ahead: int, freq: str =
     # Predict
     forecast = model.predict(future)
     
-    # Extract future part
-    # create a mask for future dates
+    # Extract future part -- create a mask for future dates
     last_date = df['date'].max()
     future_forecast = forecast[forecast['ds'] > last_date].copy()
     
@@ -80,21 +79,35 @@ def _train_and_predict_prophet(df: pd.DataFrame, periods_ahead: int, freq: str =
     
     if trend_end > trend_start * 1.05: trend = "increasing"
     elif trend_end < trend_start * 0.95: trend = "decreasing"
+    
+    # Prophet confidence score: use mean interval width relative to prediction
+    avg_width = (future_forecast['yhat_upper'] - future_forecast['yhat_lower']).mean()
+    avg_pred = future_forecast['yhat'].mean()
+    confidence = max(0, min(100, 100 - (avg_width / max(avg_pred, 1)) * 50))
         
-    return forecast_data, round(total_predicted, 2), trend
+    return forecast_data, round(total_predicted, 2), trend, round(confidence, 1)
 
 
 def _train_and_predict_linear(df: pd.DataFrame, periods_ahead: int, freq: str = 'D') -> Tuple[List[Dict], float, str]:
-    """Fallback to Linear Regression if Prophet is missing."""
+    # Fallback to Linear Regression if Prophet is missing
     # Ensure numerical dates for regression
     if 'date_ordinal' not in df.columns:
         df['date_ordinal'] = df['date'].apply(lambda x: x.toordinal())
         
-    X = df[['date_ordinal']]
-    y = df['cost']
+    X = df[['date_ordinal']].values
+    y = df['cost'].values
     
     model = LinearRegression()
     model.fit(X, y)
+    
+    # Compute residual std for confidence intervals
+    y_pred_train = model.predict(X)
+    residual_std = float(np.std(y - y_pred_train)) if len(y) > 2 else 0.0
+    
+    # Compute R² as confidence score
+    ss_res = np.sum((y - y_pred_train) ** 2)
+    ss_tot = np.sum((y - np.mean(y)) ** 2)
+    r_squared = float(1 - ss_res / ss_tot) if ss_tot > 0 else 0.0
     
     last_date = df['date'].max()
     future_dates = []
@@ -123,13 +136,18 @@ def _train_and_predict_linear(df: pd.DataFrame, periods_ahead: int, freq: str = 
     forecast_data = []
     total_predicted = 0
     
-    for date, cost in zip(future_dates, future_costs):
+    for idx, (date, cost) in enumerate(zip(future_dates, future_costs)):
         final_cost = max(0, cost)
         total_predicted += final_cost
+        # Widen confidence band slightly as we go further out
+        distance_factor = 1 + (idx * 0.02)
+        margin = 1.96 * residual_std * distance_factor
         
         forecast_data.append({
             "date": date.strftime('%Y-%m-%d'),
-            "predicted_cost": round(final_cost, 2)
+            "predicted_cost": round(final_cost, 2),
+            "lower_bound": round(max(0, final_cost - margin), 2),
+            "upper_bound": round(final_cost + margin, 2)
         })
         
     trend = "stable"
@@ -138,7 +156,7 @@ def _train_and_predict_linear(df: pd.DataFrame, periods_ahead: int, freq: str = 
         if slope > 0.1: trend = "increasing"
         elif slope < -0.1: trend = "decreasing"
         
-    return forecast_data, round(total_predicted, 2), trend
+    return forecast_data, round(total_predicted, 2), trend, round(max(0, r_squared) * 100, 1)
 
 
 def predict_future_costs(
@@ -219,10 +237,10 @@ def predict_future_costs(
 
         # Choose Backend
         if ML_BACKEND == "prophet":
-            forecast_data, total_pred, trend = _train_and_predict_prophet(df_resampled, periods_ahead, freq=freq_code)
+            forecast_data, total_pred, trend, confidence_score = _train_and_predict_prophet(df_resampled, periods_ahead, freq=freq_code)
             model_name = "Prophet (Meta)"
         else:
-            forecast_data, total_pred, trend = _train_and_predict_linear(df_resampled, periods_ahead, freq=freq_code)
+            forecast_data, total_pred, trend, confidence_score = _train_and_predict_linear(df_resampled, periods_ahead, freq=freq_code)
             model_name = "Linear Regression (Fallback)"
         
         history_data = []
@@ -238,6 +256,7 @@ def predict_future_costs(
             "history": history_data,
             "total_predicted_cost": total_pred,
             "trend": trend,
+            "confidence_score": confidence_score,
             "granularity": granularity,
             "model_used": model_name
         }
@@ -354,7 +373,10 @@ def get_detailed_forecast(
                 "growth_percentage": round(growth_pct, 1),
                 "status_badge": status_badge,
                 "risks": risks,
-                "period_label": f"Next {periods_ahead} Days"
+                "period_label": f"Next {periods_ahead} Days",
+                "confidence_score": global_forecast.get('confidence_score', 0),
+                "current_daily_avg": round(current_daily_avg, 2),
+                "predicted_daily_avg": round(predicted_daily_avg, 2)
             }
         }
         

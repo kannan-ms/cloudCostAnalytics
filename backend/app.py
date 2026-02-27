@@ -51,6 +51,8 @@ def create_app(config=Config):
     app.register_blueprint(forecast_routes)
     from routes.budget_routes import budget_routes
     app.register_blueprint(budget_routes)
+    from routes.ingestion_routes import ingestion_routes
+    app.register_blueprint(ingestion_routes)
     
     # Root endpoint
     @app.route('/', methods=['GET'])

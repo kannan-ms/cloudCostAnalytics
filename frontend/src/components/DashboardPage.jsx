@@ -4,6 +4,9 @@ import Dashboard from './Dashboard';
 import Budgets from './Budgets';
 import Forecasts from './Forecasts';
 import Reports from './Reports';
+import CloudIntegration from './CloudIntegration';
+import ServiceAnalysis from './ServiceAnalysis';
+import AnomaliesPage from './AnomaliesPage';
 
 const DashboardPage = ({ view }) => {
     const [showUpload, setShowUpload] = useState(false);
@@ -24,6 +27,15 @@ const DashboardPage = ({ view }) => {
         case 'reports':
             content = <Reports globalFilters={globalFilters} />;
             break;
+        case 'service-analysis':
+            content = <ServiceAnalysis globalFilters={globalFilters} />;
+            break;
+        case 'anomalies':
+            content = <AnomaliesPage globalFilters={globalFilters} />;
+            break;
+        case 'integrations':
+            content = <CloudIntegration />;
+            break;
         default:
             content = <Dashboard 
                 showUpload={showUpload} 
@@ -37,6 +49,7 @@ const DashboardPage = ({ view }) => {
             onUploadClick={() => setShowUpload(true)}
             globalFilters={globalFilters}
             onGlobalFilterChange={handleGlobalFilterChange}
+            currentView={view}
         >
             {content}
         </MainLayout>

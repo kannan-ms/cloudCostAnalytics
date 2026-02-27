@@ -47,8 +47,10 @@ def validate_cost_data(data: Dict) -> Tuple[bool, Optional[str]]:
         if field not in data or data[field] is None or data[field] == '':
             return False, f"Field '{field}' is required"
     
-    # Validate provider
-    if data['provider'] not in VALID_PROVIDERS:
+    # Validate provider (case-insensitive)
+    provider_lower = data['provider'].strip().lower()
+    valid_lower = [p.lower() for p in VALID_PROVIDERS]
+    if provider_lower not in valid_lower:
         return False, f"Provider must be one of: {', '.join(VALID_PROVIDERS)}"
     
     # Validate cost
@@ -218,9 +220,13 @@ def bulk_ingest_costs(user_id: str, cost_records: List[Dict]) -> Tuple[bool, Dic
                 usage_end_date = record['usage_end_date']
             
             # Create document
+            # Normalize provider to canonical casing
+            provider_map = {p.lower(): p for p in VALID_PROVIDERS}
+            normalized_provider = provider_map.get(record['provider'].strip().lower(), record['provider'].strip())
+
             document = {
                 "user_id": ObjectId(user_id),
-                "provider": record['provider'],
+                "provider": normalized_provider,
                 "cloud_account_id": record.get('cloud_account_id', ''),
                 "service_name": record['service_name'].strip(),
                 "resource_id": record.get('resource_id', ''),
@@ -934,7 +940,7 @@ def get_filter_options(user_id: str) -> Tuple[bool, any]:
         return False, f"Error fetching filter options: {str(e)}"
 
 
-def get_auto_trends(user_id: str, breakdown_by: str = 'service', filters: Dict = None) -> Tuple[bool, any]:
+def get_auto_trends(user_id: str, breakdown_by: str = 'service', filters: Dict = None, granularity: str = None, month: str = None, latest_month: bool = False) -> Tuple[bool, any]:
     """
     Automatically detect date range and return trends from user's actual data.
     Groups by billing_period if available, otherwise by month from usage_start_date.
@@ -943,6 +949,9 @@ def get_auto_trends(user_id: str, breakdown_by: str = 'service', filters: Dict =
         user_id: User's ID
         breakdown_by: Field to group by (service, region, account, provider)
         filters: Dictionary of filters to apply
+        granularity: 'daily' or 'monthly'. If None, auto-detect based on date range.
+        month: Optional year-month string (e.g. '2026-01') to filter data to a single month.
+        latest_month: If True and month is None, auto-detect and filter to the latest month.
     
     Returns:
         (success, trends_or_error)
@@ -963,6 +972,40 @@ def get_auto_trends(user_id: str, breakdown_by: str = 'service', filters: Dict =
         # Build initial match stage (User check + filters)
         user_oid = ObjectId(user_id)
         match_stage = {"user_id": user_oid}
+        
+        # Apply month filter if provided (e.g. '2026-01')
+        # If latest_month is True and no month specified, detect it first with a lightweight query
+        detected_month = None
+        full_date_range = None
+        if not month and latest_month:
+            # Quick query to get the full date range (min/max) across all user data
+            date_bounds = list(costs_collection.aggregate([
+                {"$match": {"user_id": user_oid}},
+                {"$group": {"_id": None, "min_date": {"$min": "$usage_start_date"}, "max_date": {"$max": "$usage_start_date"}}}
+            ]))
+            if date_bounds and date_bounds[0].get('max_date'):
+                md = date_bounds[0]['max_date']
+                detected_month = f"{md.year}-{str(md.month).zfill(2)}"
+                month = detected_month
+                # Save full range so frontend can build month picker
+                full_date_range = {
+                    "start": date_bounds[0]['min_date'].strftime('%Y-%m-%d'),
+                    "end": date_bounds[0]['max_date'].strftime('%Y-%m-%d')
+                }
+
+        if month:
+            try:
+                month_start = datetime.strptime(month, '%Y-%m')
+                if month_start.month == 12:
+                    month_end = month_start.replace(year=month_start.year + 1, month=1)
+                else:
+                    month_end = month_start.replace(month=month_start.month + 1)
+                match_stage['usage_start_date'] = {
+                    '$gte': month_start,
+                    '$lt': month_end
+                }
+            except (ValueError, TypeError):
+                pass  # ignore invalid month format, proceed unfiltered
         
         if filters:
             if filters.get('service') and filters['service'] != 'No Filters Applied':
@@ -1002,9 +1045,17 @@ def get_auto_trends(user_id: str, breakdown_by: str = 'service', filters: Dict =
         # Calculate duration in days
         duration_days = (max_date - min_date).days
         
-        # Determine grouping strategy based on duration
-        # If less than 60 days, group by DAY. Else group by MONTH.
-        if duration_days <= 60:
+        # Determine grouping strategy.
+        # If an explicit granularity is provided, use it. Otherwise auto-detect.
+        if granularity == 'daily':
+            use_daily = True
+        elif granularity == 'monthly':
+            use_daily = False
+        else:
+            # Auto: less than 60 days -> daily, else monthly
+            use_daily = duration_days <= 60
+        
+        if use_daily:
              # Group by Day (%Y-%m-%d)
              group_id_expression = {
                 "$dateToString": {
@@ -1013,7 +1064,7 @@ def get_auto_trends(user_id: str, breakdown_by: str = 'service', filters: Dict =
                 }
              }
         else:
-             # Group by Month (%Y-%m) (or keep billing_period logic if preferred)
+             # Group by Month (%Y-%m)
              group_id_expression = {
                 "$cond": [
                     {"$ifNull": ["$billing_period", False]},
@@ -1091,7 +1142,7 @@ def get_auto_trends(user_id: str, breakdown_by: str = 'service', filters: Dict =
         
         total_cost = sum(t['total_cost'] for t in trends)
         
-        return True, {
+        result = {
             "trends": trends,
             "summary": {
                 "periods_count": len(trends),
@@ -1103,6 +1154,15 @@ def get_auto_trends(user_id: str, breakdown_by: str = 'service', filters: Dict =
                 }
             }
         }
+        
+        # Include detected_month so frontend can sync its month selector
+        if detected_month:
+            result["detected_month"] = detected_month
+        # Include full date range for month picker when latest_month was used
+        if full_date_range:
+            result["full_date_range"] = full_date_range
+        
+        return True, result
         
     except Exception as e:
         return False, f"Error generating auto trends: {str(e)}"

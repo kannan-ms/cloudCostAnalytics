@@ -523,6 +523,123 @@ def get_daily_trends(current_user_id):
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 
+@cost_routes.route('/trends/category-daily', methods=['GET'])
+@token_required
+def get_category_daily_trends(current_user_id):
+    """
+    Daily cost trends grouped by infrastructure category for a given month.
+    Returns rolling-average data and anomaly markers.
+
+    GET /api/costs/trends/category-daily?month=2025-11
+    """
+    try:
+        from ml.category_mapper import map_service_to_category
+        from datetime import timedelta
+        import math
+
+        month_str = request.args.get('month')
+        if not month_str:
+            return jsonify({'error': 'month parameter is required (e.g. 2025-11)'}), 400
+
+        try:
+            month_start = datetime.strptime(month_str, '%Y-%m')
+        except ValueError:
+            return jsonify({'error': 'Invalid month format. Use YYYY-MM'}), 400
+
+        if month_start.month == 12:
+            month_end = month_start.replace(year=month_start.year + 1, month=1)
+        else:
+            month_end = month_start.replace(month=month_start.month + 1)
+
+        user_oid = ObjectId(current_user_id)
+        costs_col = get_collection(Collections.CLOUD_COSTS)
+
+        # ── Step 1: Fetch daily service-level costs for the month ──
+        pipeline = [
+            {"$match": {
+                "user_id": user_oid,
+                "usage_start_date": {"$gte": month_start, "$lt": month_end}
+            }},
+            {"$group": {
+                "_id": {
+                    "day": {"$dateToString": {"format": "%Y-%m-%d", "date": "$usage_start_date"}},
+                    "service": "$service_name"
+                },
+                "cost": {"$sum": "$cost"}
+            }},
+            {"$sort": {"_id.day": 1}}
+        ]
+        raw = list(costs_col.aggregate(pipeline))
+
+        if not raw:
+            return jsonify({'success': True, 'trends': [], 'categories': [], 'anomalies': []}), 200
+
+        # ── Step 2: Pivot into { date -> { category -> cost } } ──
+        date_cat: dict = {}   # date_str -> { cat -> cost }
+        for r in raw:
+            d = r['_id']['day']
+            cat = map_service_to_category(r['_id']['service'])
+            date_cat.setdefault(d, {})
+            date_cat[d][cat] = date_cat[d].get(cat, 0) + r['cost']
+
+        sorted_dates = sorted(date_cat.keys())
+        all_cats = sorted({cat for cats in date_cat.values() for cat in cats})
+
+        # ── Step 3: Build trend rows with 7-day rolling average ──
+        trends = []
+        window_size = 7
+
+        for idx, d in enumerate(sorted_dates):
+            row = {'date': d}
+            for cat in all_cats:
+                cost = round(date_cat[d].get(cat, 0), 2)
+                row[cat] = cost
+
+                # Rolling average
+                window_vals = []
+                for w in range(max(0, idx - window_size + 1), idx + 1):
+                    w_date = sorted_dates[w]
+                    window_vals.append(date_cat[w_date].get(cat, 0))
+                avg = sum(window_vals) / len(window_vals) if window_vals else 0
+                row[f'{cat}_avg'] = round(avg, 2)
+
+                # Percent deviation from rolling avg
+                if avg > 0:
+                    dev = ((cost - avg) / avg) * 100
+                    row[f'{cat}_dev'] = round(dev, 1)
+                else:
+                    row[f'{cat}_dev'] = 0.0
+
+            row['total'] = round(sum(date_cat[d].get(c, 0) for c in all_cats), 2)
+            trends.append(row)
+
+        # ── Step 4: Detect anomaly points (>40% above 7d rolling avg) ──
+        anomaly_threshold = 40  # percent
+        anomalies = []
+        for row in trends:
+            for cat in all_cats:
+                dev = row.get(f'{cat}_dev', 0)
+                if dev > anomaly_threshold and row[cat] > 1:  # ignore tiny costs
+                    anomalies.append({
+                        'date': row['date'],
+                        'category': cat,
+                        'cost': row[cat],
+                        'deviation': dev,
+                        'rolling_avg': row.get(f'{cat}_avg', 0)
+                    })
+
+        return jsonify({
+            'success': True,
+            'month': month_str,
+            'categories': all_cats,
+            'trends': trends,
+            'anomalies': anomalies
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+
 @cost_routes.route('/trends/auto', methods=['GET'])
 @token_required
 def get_auto_trends(current_user_id):
@@ -533,6 +650,19 @@ def get_auto_trends(current_user_id):
         # Get optional breakdown parameter
         breakdown_by = request.args.get('breakdown', 'service')
         
+        # Get optional granularity parameter (daily | monthly | auto)
+        granularity = request.args.get('granularity', None)
+        if granularity and granularity not in ('daily', 'monthly'):
+            granularity = None  # fall back to auto-detect
+        
+        # Get optional month filter (e.g. "2026-01")
+        month = request.args.get('month', None)
+        if month and month == 'all':
+            month = None
+        
+        # If latest_month=true, auto-detect the latest month server-side
+        latest_month = request.args.get('latest_month', 'false').lower() == 'true'
+        
         # Extract filters
         filters = {
             'service': request.args.get('service'),
@@ -541,7 +671,7 @@ def get_auto_trends(current_user_id):
             'provider': request.args.get('provider')
         }
         
-        success, result = cost_service.get_auto_trends(current_user_id, breakdown_by, filters)
+        success, result = cost_service.get_auto_trends(current_user_id, breakdown_by, filters, granularity, month, latest_month)
         
         if not success:
             return jsonify({'error': result}), 400
@@ -848,6 +978,187 @@ GCP,Compute Engine,180.75,2026-01-01,2026-01-31,us-central1,project-123,instance
     response.headers['Content-Disposition'] = 'attachment; filename=cost_data_template.csv'
     
     return response
+
+
+@cost_routes.route('/dashboard-insights', methods=['GET'])
+@token_required
+def get_dashboard_insights(current_user_id):
+    """
+    Get dashboard financial insights in a single call.
+    OPTIMIZED: Fetches all user cost data once, computes everything in Python.
+    Returns: spend change, top cost driver, anomaly count,
+    fastest growing service, category distribution, and text insights.
+    """
+    try:
+        from bson import ObjectId
+        from database import get_collection, Collections
+        from datetime import datetime, timedelta
+        from ml.category_mapper import map_service_to_category
+
+        costs_col = get_collection(Collections.CLOUD_COSTS)
+        user_oid = ObjectId(current_user_id)
+
+        # --------------------------------------------------
+        # SINGLE DB QUERY: Fetch all user cost records (only needed fields)
+        # --------------------------------------------------
+        all_docs = list(costs_col.find(
+            {"user_id": user_oid},
+            {"service_name": 1, "cost": 1, "usage_start_date": 1, "_id": 0}
+        ))
+
+        if not all_docs:
+            return jsonify({"success": True, "has_data": False}), 200
+
+        # Parse dates if needed and extract data
+        costs_data = []
+        for doc in all_docs:
+            d = doc.get("usage_start_date")
+            if isinstance(d, str):
+                d = datetime.fromisoformat(d.replace('Z', '+00:00'))
+            costs_data.append({
+                "service": doc.get("service_name", "Unknown"),
+                "cost": doc.get("cost", 0),
+                "date": d
+            })
+
+        # Compute date boundaries
+        dates = [c["date"] for c in costs_data if c["date"]]
+        if not dates:
+            return jsonify({"success": True, "has_data": False}), 200
+
+        min_date = min(dates)
+        max_date = max(dates)
+
+        # Use relative windows from max_date
+        week_start = max_date - timedelta(days=6)
+        prev_week_start = week_start - timedelta(days=7)
+        prev_week_end = week_start - timedelta(seconds=1)
+
+        # --------------------------------------------------
+        # 2. Spend change (computed in-memory)
+        # --------------------------------------------------
+        current_week_spend = sum(c["cost"] for c in costs_data if c["date"] and week_start <= c["date"] <= max_date)
+        prev_week_spend = sum(c["cost"] for c in costs_data if c["date"] and prev_week_start <= c["date"] <= prev_week_end)
+
+        spend_change_pct = 0
+        if prev_week_spend > 0:
+            spend_change_pct = round(((current_week_spend - prev_week_spend) / prev_week_spend) * 100, 1)
+
+        # --------------------------------------------------
+        # 3. Top cost driver & total cost (computed in-memory)
+        # --------------------------------------------------
+        service_totals = {}
+        total_user_cost = 0
+        for c in costs_data:
+            service_totals[c["service"]] = service_totals.get(c["service"], 0) + c["cost"]
+            total_user_cost += c["cost"]
+
+        top_driver = None
+        if service_totals:
+            top_svc = max(service_totals, key=service_totals.get)
+            top_total = service_totals[top_svc]
+            pct = round((top_total / total_user_cost) * 100, 1) if total_user_cost else 0
+            top_driver = {"service": top_svc, "total": round(top_total, 2), "percentage": pct}
+
+        # --------------------------------------------------
+        # 4. Active anomaly count (lightweight count query)
+        # --------------------------------------------------
+        anomaly_col = get_collection(Collections.ANOMALIES)
+        anomaly_count = anomaly_col.count_documents({"user_id": user_oid})
+
+        # --------------------------------------------------
+        # 5. Fastest growing service (in-memory)
+        # --------------------------------------------------
+        data_span = (max_date - min_date).days
+        mid_date = min_date + timedelta(days=data_span // 2)
+
+        svc_halves = {}
+        for c in costs_data:
+            svc = c["service"]
+            half = "recent" if c["date"] and c["date"] >= mid_date else "earlier"
+            svc_halves.setdefault(svc, {"earlier": 0, "recent": 0})
+            svc_halves[svc][half] += c["cost"]
+
+        fastest_growing = None
+        max_growth = -999
+        for svc, halves in svc_halves.items():
+            earlier = halves.get("earlier", 0)
+            recent = halves.get("recent", 0)
+            if earlier > 0:
+                growth = ((recent - earlier) / earlier) * 100
+            elif recent > 0:
+                growth = 100
+            else:
+                growth = 0
+            if growth > max_growth:
+                max_growth = growth
+                fastest_growing = {"service": svc, "growth_pct": round(growth, 1)}
+
+        # --------------------------------------------------
+        # 6. Cost distribution by category (in-memory)
+        # --------------------------------------------------
+        category_totals = {}
+        for svc, total in service_totals.items():
+            cat = map_service_to_category(svc)
+            category_totals[cat] = category_totals.get(cat, 0) + total
+
+        distribution = [{"category": k, "cost": round(v, 2)} for k, v in sorted(category_totals.items(), key=lambda x: -x[1])]
+
+        # --------------------------------------------------
+        # 7. Quick insights (in-memory)
+        # --------------------------------------------------
+        insights = []
+        svc_periods = {}
+        for c in costs_data:
+            svc = c["service"]
+            svc_periods.setdefault(svc, {"recent": 0, "older": 0})
+            if c["date"] and c["date"] >= week_start:
+                svc_periods[svc]["recent"] += c["cost"]
+            else:
+                svc_periods[svc]["older"] += c["cost"]
+
+        for svc, periods in svc_periods.items():
+            older = periods["older"]
+            recent = periods["recent"]
+            if older > 0:
+                change = ((recent - older) / older) * 100
+                if abs(change) >= 3:
+                    direction = "increased" if change > 0 else "decreased"
+                    insights.append({
+                        "service": svc,
+                        "message": f"{svc} cost {direction} by {abs(change):.0f}%",
+                        "change_pct": round(change, 1),
+                        "type": "warning" if change > 10 else "success" if change < -3 else "info"
+                    })
+            elif recent > 0:
+                insights.append({
+                    "service": svc,
+                    "message": f"{svc} is a new cost entry",
+                    "change_pct": 0,
+                    "type": "info"
+                })
+
+        insights.sort(key=lambda x: (0 if x["type"] == "warning" else 1, -abs(x["change_pct"])))
+        insights = insights[:6]
+
+        return jsonify({
+            "success": True,
+            "has_data": True,
+            "spend_change": {
+                "current_week": round(current_week_spend, 2),
+                "previous_week": round(prev_week_spend, 2),
+                "change_pct": spend_change_pct
+            },
+            "top_driver": top_driver,
+            "anomaly_count": anomaly_count,
+            "fastest_growing": fastest_growing,
+            "distribution": distribution,
+            "insights": insights
+        }), 200
+
+    except Exception as e:
+        print(f"Dashboard insights error: {e}")
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 
 # Error handlers

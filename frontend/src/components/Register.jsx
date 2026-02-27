@@ -65,45 +65,19 @@ function Register() {
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      {/* Right Section - Visual (Swapped for Register to differentiate) */}
-       <div className="hidden lg:flex flex-1 relative bg-primary-blue overflow-hidden order-last">
-        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1558494949-ef526b00d071?ixlib=rb-4.0.3&auto=format&fit=crop&w=1568&q=80')] bg-cover bg-center" />
-        <div className="absolute inset-0 bg-gradient-to-bl from-blue-900/95 to-slate-900/95" />
-        
-        <div className="absolute -top-24 -right-24 w-96 h-96 bg-blue-500 rounded-full blur-3xl opacity-20" />
-        <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-indigo-500 rounded-full blur-3xl opacity-20" />
-        
-        <div className="relative z-10 flex flex-col justify-center h-full px-16 text-white">
-            <h2 className="text-3xl font-bold mb-8 leading-tight">Get full visibility into your infrastructure costs.</h2>
-            
-            <div className="grid grid-cols-2 gap-6 bg-white/10 backdrop-blur-sm p-8 rounded-2xl border border-white/10 shadow-xl">
-                <div className="space-y-2">
-                   <div className="text-2xl font-bold text-white tracking-tight">Multi-Cloud</div>
-                   <div className="text-blue-200 text-sm font-medium">Unified Dashboard</div>
-                   <p className="text-xs text-blue-300/80 leading-relaxed">Connect your cloud accounts to view expenses in one place.</p>
-                </div>
-                 <div className="space-y-2 border-l border-white/10 pl-6">
-                   <div className="text-2xl font-bold text-white tracking-tight">Secure</div>
-                   <div className="text-blue-200 text-sm font-medium">Data Protection</div>
-                   <p className="text-xs text-blue-300/80 leading-relaxed">Your read-only credentials are encrypted and stored safely.</p>
-                </div>
-            </div>
+    <div className="relative flex items-center justify-center min-h-screen bg-slate-50" style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}>
+
+      {/* Top-left branding */}
+      <div className="absolute top-6 left-8 flex items-center gap-2.5">
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#2563EB' }}>
+          <LayoutDashboard className="w-[18px] h-[18px] text-white" />
         </div>
+        <span className="text-[17px] font-semibold text-slate-900 tracking-tight">CloudInsight</span>
       </div>
 
-
-      {/* Left Section - Form */}
-      <div className="flex-1 flex flex-col justify-center px-4 sm:px-6 lg:px-20 xl:px-24 bg-white">
-        <div className="mx-auto w-full max-w-sm lg:w-[28rem]"> {/* Slightly wider for register form */}
+      <div className="w-full max-w-[480px] bg-white rounded-xl shadow-lg px-8 py-10 mx-4">
           <div className="mb-10">
-             <div className="flex items-center gap-2 text-primary-blue font-bold text-2xl mb-8">
-               <div className="p-2 bg-blue-50 rounded-lg">
-                 <LayoutDashboard className="w-6 h-6 text-primary-blue" />
-               </div>
-               <span>CloudInsight</span>
-             </div>
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900">
+            <h2 className="text-3xl font-bold text-slate-900">
               Create your account
             </h2>
             <p className="mt-2 text-sm text-slate-600">
@@ -234,7 +208,7 @@ function Register() {
               <button
                 type="submit"
                 disabled={loading}
-                className="flex w-full justify-center rounded-lg bg-primary-blue px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue transition-all disabled:opacity-70 disabled:cursor-not-allowed items-center gap-2"
+                className="flex w-full justify-center rounded-lg bg-primary-blue px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue transition-colors disabled:opacity-70 disabled:cursor-not-allowed items-center gap-2"
               >
                 {loading ? 'Creating account...' : (
                     <>
@@ -251,7 +225,6 @@ function Register() {
                 Sign in
               </Link>
           </div>
-        </div>
       </div>
     </div>
   );

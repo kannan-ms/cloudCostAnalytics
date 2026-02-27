@@ -60,8 +60,8 @@ const CreateBudgetModal = ({ isOpen, onClose, onCreate }) => {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="bg-white rounded-xl shadow-lg w-full max-w-lg mx-4 overflow-hidden">
                 <div className="flex justify-between items-center p-6 border-b border-gray-100">
                     <h2 className="text-xl font-bold text-gray-900">Create New Budget</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
