@@ -11,6 +11,7 @@ from routes.auth_routes import auth_routes
 from routes.cost_routes import cost_routes
 from routes.anomaly_routes import anomaly_routes
 from routes.forecast_routes import forecast_routes
+from routes.report_routes import report_routes
 
 
 def create_app(config=Config):
@@ -49,6 +50,7 @@ def create_app(config=Config):
     app.register_blueprint(cost_routes)
     app.register_blueprint(anomaly_routes)
     app.register_blueprint(forecast_routes)
+    app.register_blueprint(report_routes)
     from routes.budget_routes import budget_routes
     app.register_blueprint(budget_routes)
     from routes.ingestion_routes import ingestion_routes

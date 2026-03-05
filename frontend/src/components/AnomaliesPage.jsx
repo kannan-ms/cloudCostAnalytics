@@ -33,7 +33,7 @@ const AnomaliesPage = ({ globalFilters = {} }) => {
     return (
       <div className="flex flex-col items-center justify-center h-96 text-slate-400 gap-3">
         <Loader2 size={28} className="animate-spin text-blue-400" />
-        <p className="text-sm text-slate-400">Scanning for anomalies…</p>
+        <p className="text-sm text-slate-400">Analyzing cost patterns…</p>
       </div>
     );
   }
@@ -42,8 +42,8 @@ const AnomaliesPage = ({ globalFilters = {} }) => {
     <div className="max-w-[1600px] mx-auto px-6 lg:px-8 py-6 space-y-6">
       {/* Page Header */}
       <div>
-        <h1 className="text-xl font-semibold text-slate-800">Anomalies</h1>
-        <p className="text-[12px] text-slate-400 mt-1">Cost anomalies detected across your cloud services.</p>
+        <h1 className="text-xl font-semibold text-slate-800">Cost Alerts</h1>
+        <p className="text-[12px] text-slate-400 mt-1">Intelligent cost anomaly alerts across your cloud infrastructure.</p>
       </div>
 
       {/* Content */}

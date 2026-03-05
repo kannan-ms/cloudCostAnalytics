@@ -36,6 +36,7 @@ const Header = ({ onUploadClick, onLogout, user = {}, currentView }) => {
         </div>
         )}
 
+        {isDashboard && (
         <button
           onClick={onUploadClick}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 active:bg-blue-800 transition-colors shadow-sm"
@@ -43,6 +44,7 @@ const Header = ({ onUploadClick, onLogout, user = {}, currentView }) => {
           <Upload size={16} />
           <span className="hidden sm:inline">Upload Data</span>
         </button>
+        )}
 
         <div className="h-6 w-px bg-slate-200 mx-1" />
         

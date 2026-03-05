@@ -69,7 +69,6 @@ const Dashboard = ({ showUpload, setShowUpload, globalFilters = {} }) => {
 
   const handleBreakdownSelect = (optionId) => {
     setBreakdownBy(optionId);
-    setIsBreakdownOpen(false);
   };
 
   const refreshData = async () => {
@@ -327,7 +326,7 @@ const Dashboard = ({ showUpload, setShowUpload, globalFilters = {} }) => {
       link: '/service-analysis',
     },
     {
-      label: 'Active Anomalies',
+      label: 'Cost Alerts',
       value: String(anomalyCount),
       sub: anomalyCount > 0 ? 'Review recommended' : 'No issues detected',
       icon: AlertTriangle,
@@ -539,7 +538,9 @@ const Dashboard = ({ showUpload, setShowUpload, globalFilters = {} }) => {
               </button>
 
               {isBreakdownOpen && (
-                <div className="absolute right-0 top-full mt-1.5 w-36 bg-white border border-slate-200 rounded-xl shadow-lg z-10 py-1">
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setIsBreakdownOpen(false)}></div>
+                  <div className="absolute right-0 top-full mt-1.5 w-36 bg-white border border-slate-200 rounded-xl shadow-lg z-20 py-1">
                   {breakdownOptions.map(option => (
                     <button
                       key={option.id}
@@ -553,6 +554,7 @@ const Dashboard = ({ showUpload, setShowUpload, globalFilters = {} }) => {
                     </button>
                   ))}
                 </div>
+                </>
               )}
             </div>
 
@@ -592,21 +594,24 @@ const Dashboard = ({ showUpload, setShowUpload, globalFilters = {} }) => {
               </button>
 
               {isMonthOpen && (
-                <div className="absolute right-0 top-full mt-1.5 w-40 bg-white border border-slate-200 rounded-xl shadow-lg z-10 py-1 max-h-52 overflow-y-auto scrollbar-thin">
-                  {monthOptions.map(option => (
-                    <button
-                      key={option.value}
-                      className={`w-full text-left px-3.5 py-2 text-[12px] transition-colors ${
-                        selectedMonth === option.value
-                          ? 'bg-blue-50 text-blue-700 font-semibold'
-                          : 'text-slate-600 hover:bg-slate-50'
-                      }`}
-                      onClick={() => { setSelectedMonth(option.value); setIsMonthOpen(false); }}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setIsMonthOpen(false)}></div>
+                  <div className="absolute right-0 top-full mt-1.5 w-40 bg-white border border-slate-200 rounded-xl shadow-lg z-20 py-1 max-h-52 overflow-y-auto scrollbar-thin">
+                    {monthOptions.map(option => (
+                      <button
+                        key={option.value}
+                        className={`w-full text-left px-3.5 py-2 text-[12px] transition-colors ${
+                          selectedMonth === option.value
+                            ? 'bg-blue-50 text-blue-700 font-semibold'
+                            : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                        onClick={() => setSelectedMonth(option.value)}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
 
@@ -703,7 +708,7 @@ const Dashboard = ({ showUpload, setShowUpload, globalFilters = {} }) => {
                   {categoryData.anomalies.length > 0 && (
                     <div className="mt-4 pt-3 border-t border-slate-200/40">
                       <p className="text-[10px] font-bold text-rose-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                        <AlertTriangle size={10} /> Anomalies ({categoryData.anomalies.length})
+                        <AlertTriangle size={10} /> Cost Alerts ({categoryData.anomalies.length})
                       </p>
                       {categoryData.anomalies.slice(0, 5).map((a, i) => (
                         <div key={i} className="flex items-center justify-between gap-2 px-2 py-1.5 text-[10px]">

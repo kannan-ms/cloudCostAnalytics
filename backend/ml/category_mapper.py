@@ -13,49 +13,10 @@ from typing import Dict
 # Order matters: first match wins, so more specific patterns come first.
 # ---------------------------------------------------------------------------
 
+
+
 _KEYWORD_RULES = [
-    # ── COMPUTE ──────────────────────────────────────────────────────────
-    ("ec2", "Compute"),
-    ("elastic compute", "Compute"),
-    ("virtual machines", "Compute"),
-    ("compute engine", "Compute"),
-    ("lambda", "Compute"),
-    ("azure functions", "Compute"),
-    ("cloud functions", "Compute"),
-    ("functions", "Compute"),
-    ("app service", "Compute"),
-    ("app engine", "Compute"),
-    ("container instances", "Compute"),
-    ("container apps", "Compute"),
-    ("kubernetes", "Compute"),
-    ("ecs", "Compute"),
-    ("eks", "Compute"),
-    ("cloud run", "Compute"),
-    ("vm scale sets", "Compute"),
-    ("lightsail", "Compute"),
-    ("batch", "Compute"),
-    ("fargate", "Compute"),
-    ("microsoft.compute", "Compute"),
-    ("microsoft.web", "Compute"),
-
-    # ── STORAGE ──────────────────────────────────────────────────────────
-    ("s3", "Storage"),
-    ("blob storage", "Storage"),
-    ("disk storage", "Storage"),
-    ("persistent disk", "Storage"),
-    ("backup vault", "Storage"),
-    ("backup", "Storage"),
-    ("file storage", "Storage"),
-    ("filestore", "Storage"),
-    ("netapp", "Storage"),
-    ("glacier", "Storage"),
-    ("ebs", "Storage"),
-    ("storage gateway", "Storage"),
-    ("cloud storage", "Storage"),
-    ("microsoft.storage", "Storage"),
-    ("storage", "Storage"),
-
-    # ── DATABASE ─────────────────────────────────────────────────────────
+    # ── DATABASE (move up for priority) ─────────────────────────────────────
     ("relational database", "Database"),
     ("rds", "Database"),
     ("sql database", "Database"),
@@ -81,7 +42,7 @@ _KEYWORD_RULES = [
     ("microsoft.dbformysql", "Database"),
     ("microsoft.documentdb", "Database"),
 
-    # ── NETWORKING ───────────────────────────────────────────────────────
+    # ── NETWORKING (move up for priority) ───────────────────────────────────
     ("load balancer", "Networking"),
     ("virtual private cloud", "Networking"),
     ("vpc", "Networking"),
@@ -105,6 +66,47 @@ _KEYWORD_RULES = [
     ("elastic load balancing", "Networking"),
     ("microsoft.network", "Networking"),
     ("dns", "Networking"),
+
+    # ── COMPUTE ─────────────────────────────────────────────────────────────
+    ("ec2", "Compute"),
+    ("elastic compute", "Compute"),
+    ("virtual machines", "Compute"),
+    ("compute engine", "Compute"),
+    ("lambda", "Compute"),
+    ("azure functions", "Compute"),
+    ("cloud functions", "Compute"),
+    ("functions", "Compute"),
+    ("app service", "Compute"),
+    ("app engine", "Compute"),
+    ("container instances", "Compute"),
+    ("container apps", "Compute"),
+    ("kubernetes", "Compute"),
+    ("ecs", "Compute"),
+    ("eks", "Compute"),
+    ("cloud run", "Compute"),
+    ("vm scale sets", "Compute"),
+    ("lightsail", "Compute"),
+    ("batch", "Compute"),
+    ("fargate", "Compute"),
+    ("microsoft.compute", "Compute"),
+    ("microsoft.web", "Compute"),
+
+    # ── STORAGE ─────────────────────────────────────────────────────────────
+    ("s3", "Storage"),
+    ("blob storage", "Storage"),
+    ("disk storage", "Storage"),
+    ("persistent disk", "Storage"),
+    ("backup vault", "Storage"),
+    ("backup", "Storage"),
+    ("file storage", "Storage"),
+    ("filestore", "Storage"),
+    ("netapp", "Storage"),
+    ("glacier", "Storage"),
+    ("ebs", "Storage"),
+    ("storage gateway", "Storage"),
+    ("cloud storage", "Storage"),
+    ("microsoft.storage", "Storage"),
+    ("storage", "Storage"),
 
     # ── MANAGEMENT ───────────────────────────────────────────────────────
     ("azure monitor", "Management"),

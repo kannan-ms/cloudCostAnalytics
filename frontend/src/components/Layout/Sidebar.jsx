@@ -157,7 +157,7 @@ const Sidebar = ({ globalFilters = {}, onGlobalFilterChange }) => {
       </div>
 
       {/* Navigation */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6 scrollbar-auto-hide">
         
         {/* Main Section */}
         <div className="space-y-1">
@@ -166,7 +166,7 @@ const Sidebar = ({ globalFilters = {}, onGlobalFilterChange }) => {
           </div>
           <NavItem
             icon={LayoutDashboard}
-            label="Dashboard"
+            label="Cost Overview"
             path="/dashboard"
             active={location.pathname === '/dashboard'}
           />
@@ -191,7 +191,7 @@ const Sidebar = ({ globalFilters = {}, onGlobalFilterChange }) => {
           />
           <NavItem
             icon={AlertTriangle}
-            label="Anomalies"
+            label="Cost Alerts"
             path="/anomalies"
             active={location.pathname === '/anomalies'}
           />

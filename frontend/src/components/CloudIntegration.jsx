@@ -13,6 +13,7 @@ import {
   BarChart3,
   ChevronDown,
 } from 'lucide-react';
+import { FaMicrosoft, FaAws, FaGoogle } from 'react-icons/fa';
 import api from '../services/api';
 
 // ─── Provider meta ───────────────────────────────────────────────────────────
@@ -25,7 +26,7 @@ const PROVIDERS = [
     bg: 'bg-blue-50',
     text: 'text-blue-700',
     border: 'border-blue-200',
-    icon: '☁️',
+    icon: FaMicrosoft,
     credentialFields: [
       { key: 'tenant_id', label: 'Tenant ID', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
       { key: 'client_id', label: 'Client ID', placeholder: 'Application (client) ID' },
@@ -41,7 +42,7 @@ const PROVIDERS = [
     bg: 'bg-orange-50',
     text: 'text-orange-700',
     border: 'border-orange-200',
-    icon: '🔶',
+    icon: FaAws,
     credentialFields: [
       { key: 'aws_access_key_id', label: 'Access Key ID', placeholder: 'AKIAIOSFODNN7EXAMPLE' },
       { key: 'aws_secret_access_key', label: 'Secret Access Key', placeholder: '••••••••••••', type: 'password' },
@@ -56,7 +57,7 @@ const PROVIDERS = [
     bg: 'bg-red-50',
     text: 'text-red-700',
     border: 'border-red-200',
-    icon: '🔴',
+    icon: FaGoogle,
     credentialFields: [
       { key: 'service_account_json', label: 'Service Account JSON Path', placeholder: '/path/to/key.json' },
       { key: 'project_id', label: 'Project ID', placeholder: 'my-gcp-project' },
@@ -200,7 +201,7 @@ const CloudIntegration = () => {
                   : 'border-slate-200 hover:border-slate-300 hover:shadow-sm bg-white'
               }`}
             >
-              <span className="text-3xl">{p.icon}</span>
+              <p.icon className="text-3xl" size={48} />
               <div>
                 <span className={`text-sm font-semibold ${provider === p.id ? p.text : 'text-slate-800'}`}>
                   {p.name}
@@ -337,7 +338,7 @@ const CloudIntegration = () => {
                   <Shield size={18} className="mt-0.5 flex-shrink-0" />
                   <span>
                     Credentials are sent over HTTPS and are <strong>not stored</strong> on the server.
-                    They are used only for this one-time data fetch.
+                    {/*They are used only for this one-time data fetch.*/}
                   </span>
                 </div>
 
@@ -443,7 +444,7 @@ const CloudIntegration = () => {
               />
               {result.anomalies && (
                 <SummaryCard
-                  label="Anomalies Found"
+                  label="Cost Alerts"
                   value={result.anomalies.total_detected}
                   accent={result.anomalies.total_detected > 0 ? 'red' : 'green'}
                 />
@@ -478,7 +479,7 @@ const CloudIntegration = () => {
             {/* Anomalies list */}
             {result.anomalies?.items?.length > 0 && (
               <div>
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Anomalies Detected</h3>
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Cost Alerts</h3>
                 <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                   {result.anomalies.items.map((a, i) => (
                     <div

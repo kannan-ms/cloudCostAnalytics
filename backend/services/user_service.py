@@ -103,7 +103,9 @@ def get_user_by_id(user_id):
     try:
         users_collection = get_collection(Collections.USERS)
         return users_collection.find_one({"_id": ObjectId(user_id)})
-    except:
+    except Exception as e:
+        # Log the error for debugging
+        print(f"Error in get_user_by_id: {str(e)}")
         return None
 
 
@@ -163,8 +165,17 @@ def authenticate_user(email, password):
     if not user:
         return False, "Invalid email or password"
     
-    if not check_password(password, user['password_hash']):
-        return False, "Invalid email or password"
+    # Check if password_hash exists and is valid
+    if 'password_hash' not in user or not user['password_hash']:
+        return False, "Invalid account data. Please contact support."
+    
+    try:
+        if not check_password(password, user['password_hash']):
+            return False, "Invalid email or password"
+    except Exception as e:
+        # Handle malformed password hash
+        print(f"Password check error: {str(e)}")
+        return False, "Invalid account data. Please contact support."
     
     # Update last login
     users_collection = get_collection(Collections.USERS)
@@ -178,7 +189,7 @@ def authenticate_user(email, password):
         'id': str(user['_id']),
         'name': user['name'],
         'email': user['email'],
-        'created_at': user['created_at'].isoformat()
+        'created_at': user.get('created_at', datetime.utcnow()).isoformat() if isinstance(user.get('created_at'), datetime) else str(user.get('created_at', ''))
     }
 
 
