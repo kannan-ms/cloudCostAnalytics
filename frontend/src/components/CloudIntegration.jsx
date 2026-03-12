@@ -59,7 +59,7 @@ const PROVIDERS = [
     border: 'border-red-200',
     icon: FaGoogle,
     credentialFields: [
-      { key: 'service_account_json', label: 'Service Account JSON Path', placeholder: '/path/to/key.json' },
+      { key: 'service_account_json', label: 'Service Account JSON', placeholder: 'Paste your service account JSON key here', type: 'textarea' },
       { key: 'project_id', label: 'Project ID', placeholder: 'my-gcp-project' },
       { key: 'dataset_id', label: 'BigQuery Dataset ID', placeholder: 'billing_export' },
       { key: 'table_id', label: 'BigQuery Table ID', placeholder: 'gcp_billing_export_v1' },
@@ -346,13 +346,23 @@ const CloudIntegration = () => {
                   {selectedProvider.credentialFields.map((field) => (
                     <div key={field.key}>
                       <label className="block text-sm font-medium text-slate-700 mb-1.5">{field.label}</label>
-                      <input
-                        type={field.type || 'text'}
-                        placeholder={field.placeholder}
-                        value={credentials[field.key] || ''}
-                        onChange={(e) => setCredentials({ ...credentials, [field.key]: e.target.value })}
-                        className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-colors"
-                      />
+                      {field.type === 'textarea' ? (
+                        <textarea
+                          rows={5}
+                          placeholder={field.placeholder}
+                          value={credentials[field.key] || ''}
+                          onChange={(e) => setCredentials({ ...credentials, [field.key]: e.target.value })}
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-colors font-mono resize-y"
+                        />
+                      ) : (
+                        <input
+                          type={field.type || 'text'}
+                          placeholder={field.placeholder}
+                          value={credentials[field.key] || ''}
+                          onChange={(e) => setCredentials({ ...credentials, [field.key]: e.target.value })}
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-colors"
+                        />
+                      )}
                     </div>
                   ))}
                 </div>

@@ -79,6 +79,15 @@ def _fetch_azure_api(credentials: Dict, start_date: str, end_date: str) -> pd.Da
     try:
         from azure.identity import ClientSecretCredential
         from azure.mgmt.costmanagement import CostManagementClient
+        from azure.mgmt.costmanagement.models import (
+            QueryDefinition,
+            QueryTimePeriod,
+            ExportType,
+            TimeframeType,
+            QueryDataset,
+            QueryAggregation,
+            QueryGrouping,
+        )
     except ImportError:
         raise ImportError(
             "Azure SDK not installed. Run: pip install azure-identity azure-mgmt-costmanagement"
@@ -98,17 +107,6 @@ def _fetch_azure_api(credentials: Dict, start_date: str, end_date: str) -> pd.Da
 
     scope = f"/subscriptions/{credentials['subscription_id']}"
 
-    # Build query
-    from azure.mgmt.costmanagement.models import (
-        QueryDefinition,
-        QueryTimePeriod,
-        ExportType,
-        TimeframeType,
-        QueryDataset,
-        QueryAggregation,
-        QueryGrouping,
-    )
-
     query = QueryDefinition(
         type=ExportType.ACTUAL_COST,
         timeframe=TimeframeType.CUSTOM,
@@ -122,6 +120,7 @@ def _fetch_azure_api(credentials: Dict, start_date: str, end_date: str) -> pd.Da
                 "totalCost": QueryAggregation(name="CostInBillingCurrency", function="Sum")
             },
             grouping=[
+                QueryGrouping(type="Dimension", name="ServiceName"),
                 QueryGrouping(type="Dimension", name="MeterCategory"),
             ],
         ),
@@ -133,19 +132,25 @@ def _fetch_azure_api(credentials: Dict, start_date: str, end_date: str) -> pd.Da
     columns = [col.name for col in result.columns]
     df = pd.DataFrame(rows, columns=columns)
 
-    # Normalise column names to unified schema
+    if df.empty:
+        return df
+
+    # Map columns to unified schema
     rename_map = {}
     for col in columns:
         cl = col.lower()
-        if "cost" in cl or "totalcost" in cl:
+        if cl in ("totalcost", "costinbillingcurrency", "cost"):
             rename_map[col] = "cost"
-        elif "metercategory" in cl or "service" in cl:
+        elif cl == "servicename":
             rename_map[col] = "service"
-        elif "usagedate" in cl or cl == "date":
+        elif cl == "metercategory" and "service" not in rename_map.values():
+            rename_map[col] = "service"
+        elif cl in ("usagedate", "date"):
             rename_map[col] = "date"
 
-    # Azure usage query returns date as an integer like 20260101
     df = df.rename(columns=rename_map)
+
+    # Azure returns UsageDate as integer (e.g. 20260101)
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"].astype(str), format="%Y%m%d", errors="coerce")
     if "cost" in df.columns:
@@ -207,7 +212,7 @@ def _fetch_gcp_api(credentials: Dict, start_date: str, end_date: str) -> pd.Data
     Fetch billing data from GCP BigQuery billing export.
 
     Required credentials:
-        service_account_json  – path to the JSON key file
+        service_account_json  – path to JSON key file OR the raw JSON string
         project_id            – GCP project ID
         dataset_id            – BigQuery dataset (e.g. 'billing_export')
         table_id              – BigQuery table  (e.g. 'gcp_billing_export_v1')
@@ -225,9 +230,16 @@ def _fetch_gcp_api(credentials: Dict, start_date: str, end_date: str) -> pd.Data
     if missing:
         raise ValueError(f"Missing GCP credentials: {', '.join(missing)}")
 
-    creds = service_account.Credentials.from_service_account_file(
-        credentials["service_account_json"]
-    )
+    sa_json = credentials["service_account_json"]
+    # Support both a file path and a raw JSON string/dict
+    if isinstance(sa_json, dict):
+        creds = service_account.Credentials.from_service_account_info(sa_json)
+    elif isinstance(sa_json, str) and sa_json.strip().startswith("{"):
+        import json as _json
+        creds = service_account.Credentials.from_service_account_info(_json.loads(sa_json))
+    else:
+        creds = service_account.Credentials.from_service_account_file(sa_json)
+
     client = bigquery.Client(project=credentials["project_id"], credentials=creds)
 
     full_table = (
