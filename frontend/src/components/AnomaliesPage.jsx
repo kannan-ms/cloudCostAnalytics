@@ -1,11 +1,15 @@
+
 import React, { useState, useEffect } from 'react';
 import { Loader2, Database } from 'lucide-react';
 import AnomalyList from './AnomalyList';
+import AnomalyDetailsModal from './AnomalyDetailsModal';
 import api from '../services/api';
+
 
 const AnomaliesPage = ({ globalFilters = {} }) => {
   const [anomalies, setAnomalies] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedAnomaly, setSelectedAnomaly] = useState(null);
 
   const fetchAnomalies = async () => {
     setLoading(true);
@@ -38,6 +42,7 @@ const AnomaliesPage = ({ globalFilters = {} }) => {
     );
   }
 
+
   return (
     <div className="max-w-[1600px] mx-auto px-6 lg:px-8 py-6 space-y-6">
       {/* Page Header */}
@@ -48,8 +53,11 @@ const AnomaliesPage = ({ globalFilters = {} }) => {
 
       {/* Content */}
       <div className="bg-white rounded-xl border border-slate-200/60 p-6 lg:p-7">
-        <AnomalyList anomalies={anomalies} />
+        <AnomalyList anomalies={anomalies} onAnomalyClick={setSelectedAnomaly} />
       </div>
+
+      {/* Modal for details */}
+      <AnomalyDetailsModal anomaly={selectedAnomaly} onClose={() => setSelectedAnomaly(null)} />
     </div>
   );
 };

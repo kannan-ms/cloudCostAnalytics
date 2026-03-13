@@ -1,7 +1,7 @@
 import React from 'react';
 import { AlertTriangle, TrendingUp, CheckCircle, AlertOctagon, Info } from 'lucide-react';
 
-const AnomalyList = ({ anomalies }) => {
+const AnomalyList = ({ anomalies, onAnomalyClick }) => {
   if (!anomalies || anomalies.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-4 py-12">
@@ -59,7 +59,12 @@ const AnomalyList = ({ anomalies }) => {
         const Icon = style.icon;
 
         return (
-          <div key={index} className={`rounded-lg border ${style.border} bg-white p-5 shadow-sm hover:shadow transition-shadow`}>
+          <div
+            key={index}
+            className={`rounded-lg border ${style.border} bg-white p-5 shadow-sm hover:shadow transition-shadow cursor-pointer`}
+            onClick={() => onAnomalyClick && onAnomalyClick(item)}
+            title="View details"
+          >
             {/* Header */}
             <div className="flex justify-between items-start mb-3">
               <div className="flex items-center gap-2">
