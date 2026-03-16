@@ -12,6 +12,7 @@ from services import insight_service
 import pandas as pd
 import numpy as np
 import logging
+import math
 
 # Configure logging to suppress Prophet noise
 logging.getLogger('cmdstanpy').setLevel(logging.WARNING)
@@ -28,7 +29,7 @@ except ImportError:
     except ImportError:
         ML_BACKEND = None
 
-def _train_and_predict_prophet(df: pd.DataFrame, periods_ahead: int, freq: str = 'D') -> Tuple[List[Dict], float, str]:
+def _train_and_predict_prophet(df: pd.DataFrame, periods_ahead: int, freq: str = 'D') -> Tuple[List[Dict], float, str, float]:
     """Helper to train Prophet model and predict."""
     # Rename for Prophet
     df_prophet = df.rename(columns={'date': 'ds', 'cost': 'y'})
@@ -88,75 +89,117 @@ def _train_and_predict_prophet(df: pd.DataFrame, periods_ahead: int, freq: str =
     return forecast_data, round(total_predicted, 2), trend, round(confidence, 1)
 
 
-def _train_and_predict_linear(df: pd.DataFrame, periods_ahead: int, freq: str = 'D') -> Tuple[List[Dict], float, str]:
-    # Fallback to Linear Regression if Prophet is missing
-    # Ensure numerical dates for regression
-    if 'date_ordinal' not in df.columns:
-        df['date_ordinal'] = df['date'].apply(lambda x: x.toordinal())
-        
-    X = df[['date_ordinal']].values
-    y = df['cost'].values
-    
+def _add_month(date_obj: datetime) -> datetime:
+    """Advance by one month while keeping day in range for target month."""
+    new_month = date_obj.month + 1 if date_obj.month < 12 else 1
+    new_year = date_obj.year + 1 if date_obj.month == 12 else date_obj.year
+    import calendar
+    last_day_of_next_month = calendar.monthrange(new_year, new_month)[1]
+    target_day = min(date_obj.day, last_day_of_next_month)
+    return date_obj.replace(year=new_year, month=new_month, day=target_day)
+
+
+def _next_date(date_obj: datetime, freq: str) -> datetime:
+    if freq == 'D':
+        return date_obj + timedelta(days=1)
+    if freq == 'W':
+        return date_obj + timedelta(weeks=1)
+    if freq == 'M':
+        return _add_month(date_obj)
+    return date_obj + timedelta(days=1)
+
+
+def _build_time_features(dates: pd.Series, base_date: datetime, freq: str) -> np.ndarray:
+    """Create trend + seasonal features for regression fallback."""
+    t = np.array([(d - base_date).days for d in dates], dtype=float)
+    t2 = t ** 2
+
+    if freq == 'D':
+        period = 7.0
+    elif freq == 'W':
+        period = 52.0
+    else:
+        period = 12.0
+
+    sin1 = np.sin(2 * np.pi * t / period)
+    cos1 = np.cos(2 * np.pi * t / period)
+    sin2 = np.sin(4 * np.pi * t / period)
+    cos2 = np.cos(4 * np.pi * t / period)
+
+    return np.column_stack([t, t2, sin1, cos1, sin2, cos2])
+
+
+def _train_and_predict_linear(df: pd.DataFrame, periods_ahead: int, freq: str = 'D') -> Tuple[List[Dict], float, str, float]:
+    """Enhanced sklearn fallback with trend + seasonality features."""
+    df = df.sort_values('date').copy()
+
+    # Keep outliers from dominating trend in fallback mode.
+    y_raw = df['cost'].astype(float).values
+    if len(y_raw) >= 10:
+        q1, q3 = np.percentile(y_raw, [25, 75])
+        iqr = q3 - q1
+        lower = q1 - 1.5 * iqr
+        upper = q3 + 1.5 * iqr
+        y = np.clip(y_raw, lower, upper)
+    else:
+        y = y_raw
+
+    base_date = df['date'].min()
+    X = _build_time_features(df['date'], base_date, freq)
+
     model = LinearRegression()
     model.fit(X, y)
-    
-    # Compute residual std for confidence intervals
+
     y_pred_train = model.predict(X)
-    residual_std = float(np.std(y - y_pred_train)) if len(y) > 2 else 0.0
-    
-    # Compute R² as confidence score
-    ss_res = np.sum((y - y_pred_train) ** 2)
-    ss_tot = np.sum((y - np.mean(y)) ** 2)
-    r_squared = float(1 - ss_res / ss_tot) if ss_tot > 0 else 0.0
-    
+    residuals = y - y_pred_train
+    residual_std = float(np.std(residuals)) if len(residuals) > 2 else 0.0
+
+    # Confidence by MAPE-like score on non-zero points.
+    non_zero_mask = np.abs(y) > 1e-6
+    if np.any(non_zero_mask):
+        mape = float(np.mean(np.abs((y[non_zero_mask] - y_pred_train[non_zero_mask]) / y[non_zero_mask])) * 100)
+    else:
+        mape = 100.0
+    confidence_score = max(0.0, min(100.0, 100.0 - mape))
+
     last_date = df['date'].max()
-    future_dates = []
-    future_ordinals = []
-    
+    future_dates: List[datetime] = []
     current_date = last_date
-    for i in range(periods_ahead):
-        if freq == 'D':
-            current_date += timedelta(days=1)
-        elif freq == 'W':
-            current_date += timedelta(weeks=1)
-        elif freq == 'M':
-            # Simple month add
-            new_month = current_date.month + 1 if current_date.month < 12 else 1
-            new_year = current_date.year + 1 if current_date.month == 12 else current_date.year
-            import calendar
-            last_day_of_next_month = calendar.monthrange(new_year, new_month)[1]
-            target_day = min(current_date.day, last_day_of_next_month)
-            current_date = current_date.replace(year=new_year, month=new_month, day=target_day)
-            
+    for _ in range(periods_ahead):
+        current_date = _next_date(current_date, freq)
         future_dates.append(current_date)
-        future_ordinals.append([current_date.toordinal()])
-        
-    future_costs = model.predict(future_ordinals)
-    
+
+    X_future = _build_time_features(pd.Series(future_dates), base_date, freq)
+    future_costs = model.predict(X_future)
+
     forecast_data = []
-    total_predicted = 0
-    
-    for idx, (date, cost) in enumerate(zip(future_dates, future_costs)):
-        final_cost = max(0, cost)
+    total_predicted = 0.0
+
+    # Increase uncertainty with horizon but less aggressively than before.
+    for idx, (date, pred_cost) in enumerate(zip(future_dates, future_costs), start=1):
+        final_cost = float(max(0.0, pred_cost))
         total_predicted += final_cost
-        # Widen confidence band slightly as we go further out
-        distance_factor = 1 + (idx * 0.02)
-        margin = 1.96 * residual_std * distance_factor
-        
+
+        horizon_scale = math.sqrt(1 + (idx / max(len(df), 1)))
+        margin = 1.64 * residual_std * horizon_scale
+
         forecast_data.append({
             "date": date.strftime('%Y-%m-%d'),
             "predicted_cost": round(final_cost, 2),
-            "lower_bound": round(max(0, final_cost - margin), 2),
+            "lower_bound": round(max(0.0, final_cost - margin), 2),
             "upper_bound": round(final_cost + margin, 2)
         })
-        
+
     trend = "stable"
-    if hasattr(model, 'coef_'):
-        slope = model.coef_[0]
-        if slope > 0.1: trend = "increasing"
-        elif slope < -0.1: trend = "decreasing"
-        
-    return forecast_data, round(total_predicted, 2), trend, round(max(0, r_squared) * 100, 1)
+    if len(forecast_data) >= 2:
+        start = forecast_data[0]['predicted_cost']
+        end = forecast_data[-1]['predicted_cost']
+        if start > 0 and end > start * 1.05:
+            trend = "increasing"
+        elif start > 0 and end < start * 0.95:
+            trend = "decreasing"
+
+    return forecast_data, round(total_predicted, 2), trend, round(confidence_score, 1)
 
 
 def predict_future_costs(

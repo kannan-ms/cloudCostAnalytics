@@ -47,12 +47,12 @@ const Reports = () => {
             setDownloading(reportId);
             
             // For monthly reports, use last month as default
-            let url = `/reports/download/${reportId}`;
+            let url = `/reports/download/${reportId}?format=pdf`;
             if (reportId === 'monthly_summary') {
                 const now = new Date();
                 const lastMonth = now.getMonth() === 0 ? 12 : now.getMonth();
                 const year = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-                url += `?year=${year}&month=${lastMonth}`;
+                url += `&year=${year}&month=${lastMonth}`;
             }
             
             const response = await api.get(url, {
@@ -60,14 +60,15 @@ const Reports = () => {
             });
             
             // Create blob link to download
-            const blob = new Blob([response.data], { type: 'text/csv' });
+            const contentType = response.headers['content-type'] || 'application/octet-stream';
+            const blob = new Blob([response.data], { type: contentType });
             const downloadUrl = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = downloadUrl;
             
             // Extract filename from headers or use default
             const contentDisposition = response.headers['content-disposition'];
-            let filename = `report_${reportId}_${Date.now()}.csv`;
+            let filename = `report_${reportId}_${Date.now()}.pdf`;
             if (contentDisposition) {
                 const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
                 if (filenameMatch) {
@@ -87,7 +88,19 @@ const Reports = () => {
             // Get error message from response
             let errorMessage = 'Failed to download report.';
             if (err.response?.data) {
-                if (typeof err.response.data === 'string') {
+                if (err.response.data instanceof Blob) {
+                    try {
+                        const text = await err.response.data.text();
+                        const parsed = JSON.parse(text);
+                        if (parsed?.error) {
+                            errorMessage = parsed.error;
+                        } else if (text) {
+                            errorMessage = text;
+                        }
+                    } catch {
+                        // Keep default message if blob cannot be parsed
+                    }
+                } else if (typeof err.response.data === 'string') {
                     errorMessage = err.response.data;
                 } else if (err.response.data.error) {
                     errorMessage = err.response.data.error;

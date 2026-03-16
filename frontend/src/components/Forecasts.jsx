@@ -8,7 +8,7 @@ import api from '../services/api';
 import AdvancedForecast from './AdvancedForecast';
 import {
     ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-    ResponsiveContainer, ReferenceLine
+    ResponsiveContainer, ReferenceLine, ReferenceArea
 } from 'recharts';
 import { CHART_COLORS, ChartGradients, XAxisProps, YAxisProps, GridProps } from '../utils/chartConfig.jsx';
 
@@ -165,6 +165,26 @@ const ForecastTooltip = ({ active, payload, label }) => {
     );
 };
 
+const PredictedDot = ({ cx, cy, payload, index }) => {
+    if (!payload?.is_forecast || cx == null || cy == null) return null;
+
+    const isKeyPoint = payload.forecast_index === 1 || (payload.forecast_index % 7 === 0);
+    const isLastPoint = payload.is_forecast && payload.is_forecast_end;
+
+    if (!isKeyPoint && !isLastPoint) return null;
+
+    if (isLastPoint) {
+        return (
+            <g>
+                <circle cx={cx} cy={cy} r={9} fill="rgba(99,102,241,0.15)" />
+                <circle cx={cx} cy={cy} r={5} fill="#6366f1" stroke="#ffffff" strokeWidth={2} />
+            </g>
+        );
+    }
+
+    return <circle cx={cx} cy={cy} r={2.8} fill="#6366f1" stroke="#ffffff" strokeWidth={1} />;
+};
+
 /* ------------------------------------------------------------------ */
 /*  Risk Indicator Badge                                              */
 /* ------------------------------------------------------------------ */
@@ -292,13 +312,19 @@ const Forecasts = () => {
         const histPoints = (history || []).map(h => ({
             date: h.date,
             actual_cost: h.actual_cost,
+            is_forecast: false,
         }));
 
-        const forecastPoints = (forecast || []).map(f => ({
+        const forecastPoints = (forecast || []).map((f, idx, arr) => ({
             date: f.date,
             predicted_cost: f.predicted_cost,
             lower_bound: f.lower_bound,
             upper_bound: f.upper_bound,
+            confidence_band: Math.max(0, (f.upper_bound ?? 0) - (f.lower_bound ?? 0)),
+            predicted_fill: f.predicted_cost,
+            forecast_index: idx + 1,
+            is_forecast_end: idx === arr.length - 1,
+            is_forecast: true,
         }));
 
         // Add a bridge point — last history point repeated for forecast start
@@ -309,10 +335,38 @@ const Forecasts = () => {
                 predicted_cost: lastHist.actual_cost,
                 lower_bound: lastHist.actual_cost,
                 upper_bound: lastHist.actual_cost,
+                confidence_band: 0,
+                predicted_fill: lastHist.actual_cost,
+                forecast_index: 0,
+                is_forecast_end: false,
+                is_forecast: true,
             });
         }
 
         return [...histPoints, ...forecastPoints];
+    }, [forecastData]);
+
+    const forecastStartDate = forecastData?.global_forecast?.forecast?.[0]?.date || null;
+    const forecastEndDate = forecastData?.global_forecast?.forecast?.slice(-1)?.[0]?.date || null;
+
+    const forecastStats = useMemo(() => {
+        const f = forecastData?.global_forecast?.forecast || [];
+        if (!f.length) return null;
+
+        const values = f.map(point => Number(point.predicted_cost || 0));
+        const first = values[0];
+        const last = values[values.length - 1];
+        const max = Math.max(...values);
+        const min = Math.min(...values);
+        const deltaPct = first > 0 ? ((last - first) / first) * 100 : 0;
+
+        return {
+            first,
+            last,
+            min,
+            max,
+            deltaPct,
+        };
     }, [forecastData]);
 
     const cardValues = useMemo(() => {
@@ -381,10 +435,9 @@ const Forecasts = () => {
                         <h3 className="text-sm font-semibold text-slate-700">Total Cost Trajectory</h3>
                         <p className="text-[11px] text-slate-400 mt-0.5">Historical spend with {days}-day predictive outlook and 95% confidence band</p>
                     </div>
-                    <div className="flex items-center gap-4 text-[11px] text-slate-500">
+                    <div className="flex items-center gap-3 text-[11px] text-slate-500 flex-wrap justify-end">
                         <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-slate-400 rounded inline-block" /> Actual</span>
                         <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-indigo-500 rounded inline-block" /> Predicted</span>
-                        <span className="flex items-center gap-1.5"><span className="w-5 h-3 bg-indigo-100 rounded inline-block opacity-60" /> Confidence</span>
                     </div>
                 </div>
                 <div className="h-80 w-full">
@@ -392,13 +445,24 @@ const Forecasts = () => {
                         <ComposedChart data={chartData} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
                             <defs>
                                 <linearGradient id="forecastBand" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#818cf8" stopOpacity={0.18} />
-                                    <stop offset="100%" stopColor="#818cf8" stopOpacity={0.04} />
+                                    <stop offset="0%" stopColor="#818cf8" stopOpacity={0.26} />
+                                    <stop offset="100%" stopColor="#818cf8" stopOpacity={0.06} />
                                 </linearGradient>
                                 <linearGradient id="actualLine" x1="0" y1="0" x2="1" y2="0">
                                     <stop offset="0%" stopColor="#94a3b8" />
                                     <stop offset="100%" stopColor="#64748b" />
                                 </linearGradient>
+                                <linearGradient id="futureZone" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#eef2ff" stopOpacity={0.35} />
+                                    <stop offset="100%" stopColor="#eef2ff" stopOpacity={0.08} />
+                                </linearGradient>
+                                <linearGradient id="predictedFill" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#6366f1" stopOpacity={0.25} />
+                                    <stop offset="100%" stopColor="#6366f1" stopOpacity={0.02} />
+                                </linearGradient>
+                                <pattern id="futureHatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                                    <line x1="0" y1="0" x2="0" y2="10" stroke="#c7d2fe" strokeWidth="1" strokeOpacity="0.35" />
+                                </pattern>
                             </defs>
                             <CartesianGrid {...GridProps} />
                             <XAxis
@@ -412,24 +476,85 @@ const Forecasts = () => {
                             <YAxis {...YAxisProps} />
                             <Tooltip content={<ForecastTooltip />} />
 
-                            {/* Confidence band */}
+                            {forecastStartDate && forecastEndDate && (
+                                <ReferenceArea
+                                    x1={forecastStartDate}
+                                    x2={forecastEndDate}
+                                    fill="url(#futureZone)"
+                                    fillOpacity={1}
+                                    ifOverflow="extendDomain"
+                                />
+                            )}
+
+                            {forecastStartDate && forecastEndDate && (
+                                <ReferenceArea
+                                    x1={forecastStartDate}
+                                    x2={forecastEndDate}
+                                    fill="url(#futureHatch)"
+                                    fillOpacity={0.22}
+                                    ifOverflow="extendDomain"
+                                />
+                            )}
+
+                            {forecastStartDate && (
+                                <ReferenceLine
+                                    x={forecastStartDate}
+                                    stroke="#c7d2fe"
+                                    strokeDasharray="4 4"
+                                    label={{
+                                        value: 'Forecast start',
+                                        position: 'insideTopRight',
+                                        fill: '#6366f1',
+                                        fontSize: 11,
+                                    }}
+                                />
+                            )}
+
+                            {forecastStats && (
+                                <ReferenceLine
+                                    y={forecastStats.max}
+                                    stroke="#818cf8"
+                                    strokeDasharray="3 3"
+                                    strokeOpacity={0.5}
+                                    label={{
+                                        value: `Peak $${forecastStats.max.toFixed(1)}`,
+                                        position: 'right',
+                                        fill: '#6366f1',
+                                        fontSize: 10,
+                                    }}
+                                />
+                            )}
+
+                            {/* Confidence band between lower and upper bounds */}
                             <Area
                                 type="monotone"
-                                dataKey="upper_bound"
+                                dataKey="lower_bound"
                                 stroke="none"
-                                fill="url(#forecastBand)"
-                                fillOpacity={1}
+                                fillOpacity={0}
+                                stackId="confidence"
                                 isAnimationActive={true}
                                 animationDuration={800}
                             />
                             <Area
                                 type="monotone"
-                                dataKey="lower_bound"
+                                dataKey="confidence_band"
                                 stroke="none"
-                                fill="#f0f2f5"
+                                fill="url(#forecastBand)"
                                 fillOpacity={1}
+                                stackId="confidence"
                                 isAnimationActive={true}
                                 animationDuration={800}
+                            />
+
+                            {/* Projected area for visual emphasis */}
+                            <Area
+                                type="monotone"
+                                dataKey="predicted_fill"
+                                stroke="none"
+                                fill="url(#predictedFill)"
+                                fillOpacity={1}
+                                isAnimationActive={true}
+                                animationDuration={900}
                             />
 
                             {/* Upper / lower bound lines */}
@@ -473,7 +598,7 @@ const Forecasts = () => {
                                 dataKey="predicted_cost"
                                 stroke="#6366f1"
                                 strokeWidth={2.5}
-                                dot={false}
+                                dot={<PredictedDot />}
                                 activeDot={{ r: 5, strokeWidth: 0, fill: '#6366f1' }}
                                 isAnimationActive={true}
                                 animationDuration={900}
@@ -482,6 +607,20 @@ const Forecasts = () => {
                         </ComposedChart>
                     </ResponsiveContainer>
                 </div>
+
+                {forecastStats && (
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-3 text-[12px]">
+                        <span className="px-2 py-1 rounded bg-slate-50 text-slate-600 border border-slate-200">
+                            Start: <span className="font-semibold text-slate-800">${forecastStats.first.toFixed(2)}</span>
+                        </span>
+                        <span className="px-2 py-1 rounded bg-slate-50 text-slate-600 border border-slate-200">
+                            End: <span className="font-semibold text-slate-800">${forecastStats.last.toFixed(2)}</span>
+                        </span>
+                        <span className={`px-2 py-1 rounded border font-medium ${forecastStats.deltaPct >= 0 ? 'bg-red-50 text-red-700 border-red-100' : 'bg-emerald-50 text-emerald-700 border-emerald-100'}`}>
+                            {forecastStats.deltaPct >= 0 ? '+' : ''}{forecastStats.deltaPct.toFixed(1)}% across horizon
+                        </span>
+                    </div>
+                )}
             </div>
 
             {/* -------- Service Breakdown Table -------- */}

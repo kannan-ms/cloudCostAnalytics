@@ -57,12 +57,14 @@ def get_forecast(current_user_id):
             result = forecast_service.get_detailed_forecast(
                 current_user_id, 
                 periods_ahead=days_ahead,
+                granularity=granularity,
                 filters=filters if filters else None
             )
         else:
             result = forecast_service.predict_future_costs(
                 current_user_id, 
                 periods_ahead=days_ahead,
+                granularity=granularity,
                 filters=filters if filters else None
             )
         

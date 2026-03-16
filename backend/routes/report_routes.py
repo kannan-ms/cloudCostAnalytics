@@ -64,7 +64,8 @@ def list_reports(current_user_id):
                 'id': 'monthly_summary',
                 'name': 'Monthly Cost Summary',
                 'description': 'Detailed breakdown of costs for a specific month',
-                'type': 'csv',
+                'type': 'pdf',
+                'available_formats': ['pdf', 'txt', 'csv'],
                 'requires_params': True,
                 'params': ['year', 'month']
             },
@@ -72,21 +73,24 @@ def list_reports(current_user_id):
                 'id': 'executive_overview',
                 'name': 'Executive Overview - Last 90 Days',
                 'description': 'High-level summary of cloud spending',
-                'type': 'csv',
+                'type': 'pdf',
+                'available_formats': ['pdf', 'txt', 'csv'],
                 'requires_params': False
             },
             {
                 'id': 'resource_utilization',
                 'name': 'Resource Utilization Report',
                 'description': 'Cost breakdown by service and category',
-                'type': 'csv',
+                'type': 'pdf',
+                'available_formats': ['pdf', 'txt', 'csv'],
                 'requires_params': False
             },
             {
                 'id': 'anomaly_log',
                 'name': 'Anomaly Detection Log',
                 'description': 'All detected cost anomalies',
-                'type': 'csv',
+                'type': 'pdf',
+                'available_formats': ['pdf', 'txt', 'csv'],
                 'requires_params': False
             }
         ]
@@ -114,6 +118,10 @@ def download_report(current_user_id, report_type):
     - month: Month for monthly reports (optional)
     """
     try:
+        fmt = request.args.get('format', 'pdf').lower()
+        if fmt not in ('pdf', 'txt', 'csv'):
+            return jsonify({'success': False, 'error': 'Invalid format. Use pdf, txt, or csv'}), 400
+
         # Generate report based on type
         if report_type == 'monthly_summary':
             # Get year and month from query params
@@ -133,19 +141,23 @@ def download_report(current_user_id, report_type):
             success, result = report_service.generate_monthly_cost_summary(
                 current_user_id, year, month
             )
-            filename = f"monthly_cost_summary_{year}_{month:02d}.csv"
+            base_filename = f"monthly_cost_summary_{year}_{month:02d}"
+            report_title = f"Monthly Cost Summary ({year}-{month:02d})"
             
         elif report_type == 'executive_overview':
             success, result = report_service.generate_executive_overview(current_user_id)
-            filename = f"executive_overview_{datetime.now().strftime('%Y%m%d')}.csv"
+            base_filename = f"executive_overview_{datetime.now().strftime('%Y%m%d')}"
+            report_title = "Executive Overview"
             
         elif report_type == 'resource_utilization':
             success, result = report_service.generate_resource_utilization_report(current_user_id)
-            filename = f"resource_utilization_{datetime.now().strftime('%Y%m%d')}.csv"
+            base_filename = f"resource_utilization_{datetime.now().strftime('%Y%m%d')}"
+            report_title = "Resource Utilization Report"
             
         elif report_type == 'anomaly_log':
             success, result = report_service.generate_anomaly_detection_report(current_user_id)
-            filename = f"anomaly_log_{datetime.now().strftime('%Y%m%d')}.csv"
+            base_filename = f"anomaly_log_{datetime.now().strftime('%Y%m%d')}"
+            report_title = "Anomaly Detection Log"
             
         else:
             return jsonify({
@@ -158,11 +170,38 @@ def download_report(current_user_id, report_type):
                 'success': False,
                 'error': result
             }), 404
+
+        # Convert generated CSV content to requested output format
+        if fmt == 'csv':
+            payload = result
+            mime_type = 'text/csv'
+            filename = f"{base_filename}.csv"
+        elif fmt == 'txt':
+            payload = report_service.convert_csv_to_txt(result)
+            mime_type = 'text/plain'
+            filename = f"{base_filename}.txt"
+        else:  # pdf
+            ok, pdf_payload = report_service.convert_csv_to_pdf(report_title, result)
+            if not ok:
+                # Graceful fallback when optional PDF dependency is unavailable.
+                # This keeps reports downloadable in professional text format.
+                if isinstance(pdf_payload, str) and 'reportlab' in pdf_payload.lower():
+                    payload = report_service.convert_csv_to_txt(result)
+                    mime_type = 'text/plain'
+                    filename = f"{base_filename}.txt"
+                else:
+                    return jsonify({'success': False, 'error': pdf_payload}), 500
+            else:
+                payload = pdf_payload
+                mime_type = 'application/pdf'
+                filename = f"{base_filename}.pdf"
         
-        # Create response with CSV file
-        response = make_response(result)
-        response.headers['Content-Type'] = 'text/csv'
+        # Create response with generated file
+        response = make_response(payload)
+        response.headers['Content-Type'] = mime_type
         response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+        if fmt == 'pdf' and filename.endswith('.txt'):
+            response.headers['X-Report-Format-Fallback'] = 'txt'
         
         return response
         

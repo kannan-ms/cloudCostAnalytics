@@ -80,9 +80,13 @@ const Budgets = () => {
 
             {!loading && budgets.length === 0 ? (
                 <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
-                    <div className="mx-auto w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                    <button
+                        onClick={() => setIsModalOpen(true)}
+                        className="mx-auto w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-4 hover:bg-blue-100 transition-colors focus:outline-none"
+                        title="Create Budget"
+                    >
                         <Plus size={24} className="text-gray-400" />
-                    </div>
+                    </button>
                     <h3 className="text-lg font-medium text-gray-900">No budgets yet</h3>
                     <p className="text-gray-500 mb-6">Create a budget to start monitoring your cloud spend.</p>
                     <button
