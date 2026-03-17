@@ -7,7 +7,6 @@ from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError, ConfigurationError
 from config import Config
 import logging
-import urllib.parse
 
 # Configure logging - reduced verbosity
 logging.basicConfig(level=logging.WARNING)

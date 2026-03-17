@@ -161,13 +161,12 @@ def detect_anomalies_ml(user_id: str) -> List[Dict]:
                 sdf_clean['ano'] = clf.predict(X_scaled)
                 sdf_clean['score'] = clf.decision_function(X_scaled)
                 
-                # ── Hybrid Rule: flag extreme ratio deviations the model may miss ──
+                # ── Hybrid Rule: flag extreme spike deviations the model may miss ──
                 RATIO_SPIKE_THRESHOLD = 5.0    # cost > 5× the 7-day mean
-                RATIO_DROP_THRESHOLD  = 0.15   # cost < 15% of the 7-day mean
                 for idx in sdf_clean.index:
                     ratio = sdf_clean.at[idx, 'cost_ratio_7']
                     if sdf_clean.at[idx, 'ano'] == 1:  # model said normal
-                        if ratio >= RATIO_SPIKE_THRESHOLD or ratio <= RATIO_DROP_THRESHOLD:
+                        if ratio >= RATIO_SPIKE_THRESHOLD:
                             sdf_clean.at[idx, 'ano'] = -1  # override to anomaly
                 
                 # Check anomalies in the LAST 7 DAYS of the data (relative to latest date)
@@ -179,7 +178,11 @@ def detect_anomalies_ml(user_id: str) -> List[Dict]:
                     expected_cost = float(row['rolling_mean_7'])
                     
                     # Logic check: Ignore tiny absolute costs
-                    if actual_cost < 1.0: continue 
+                    if actual_cost < 1.0: continue
+
+                    # Only report cost increases (spikes), not decreases
+                    if actual_cost <= expected_cost:
+                        continue
 
                     if expected_cost > 0:
                         deviation_pct = ((actual_cost - expected_cost) / expected_cost) * 100
@@ -191,8 +194,6 @@ def detect_anomalies_ml(user_id: str) -> List[Dict]:
                     if abs(deviation_pct) < MIN_DEVIATION_PCT:
                         continue
                     
-                    direction = "Spike" if actual_cost > expected_cost else "Drop"
-                    
                     anomalies.append({
                         "user_id": user_id,
                         "service_name": service,
@@ -202,7 +203,7 @@ def detect_anomalies_ml(user_id: str) -> List[Dict]:
                         "deviation_percentage": round(deviation_pct, 2),
                         "severity": "high" if abs(deviation_pct) > 100 else "medium",
                         "anomaly_score": float(row['score']),
-                        "message": f"{direction} detected: based on {category} patterns ({abs(deviation_pct):.0f}% deviation)",
+                        "message": f"Spike detected: based on {category} patterns ({abs(deviation_pct):.0f}% above expected)",
                         "detected_at": row['date'].to_pydatetime()
                     })
 
@@ -223,7 +224,14 @@ def run_anomaly_detection_for_user(user_id: str) -> Tuple[bool, any]:
         
         # Store results
         anomalies_collection = get_collection(Collections.ANOMALIES)
-        
+
+        # Purge any previously stored anomalies where detected_value <= expected_value
+        # (drops/decreases should never appear in the system)
+        anomalies_collection.delete_many({
+            "user_id": ObjectId(user_id),
+            "$expr": {"$lte": ["$detected_value", "$expected_value"]}
+        })
+
         # Deduplication: find the date range from detected anomalies
         if ml_anomalies:
             earliest_anomaly = min(a['detected_at'] for a in ml_anomalies)
@@ -280,7 +288,11 @@ def run_anomaly_detection_for_user(user_id: str) -> Tuple[bool, any]:
 def get_user_anomalies(user_id: str, status: Optional[str] = None, severity: Optional[str] = None, limit: int = 50) -> Tuple[bool, any]:
     """Get anomalies."""
     try:
-        query = {"user_id": ObjectId(user_id)}
+        query = {
+            "user_id": ObjectId(user_id),
+            # Only return spikes: detected cost must exceed expected cost
+            "$expr": {"$gt": ["$detected_value", "$expected_value"]}
+        }
         if status: query["status"] = status
         if severity: query["severity"] = severity
         

@@ -13,6 +13,11 @@ from services import forecast_service
 
 class BudgetService:
     @staticmethod
+    def _is_leap_year(year):
+        """Check if a year is a leap year."""
+        return (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0)
+
+    @staticmethod
     def create_budget(user_id: str, data: Dict) -> Dict:
         budgets = get_collection(Collections.BUDGETS)
         
@@ -66,15 +71,47 @@ class BudgetService:
         if not budget:
             return {"error": "Budget not found"}
 
-        # Determine Date Range (Monthly)
+        # Determine Date Range based on period
         now = datetime.utcnow()
-        start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        _, last_day = calendar.monthrange(now.year, now.month)
-        end_date = now.replace(day=last_day, hour=23, minute=59, second=59, microsecond=999999)
+        period = budget.get('period', 'monthly')
         
-        days_in_month = last_day
-        days_passed = now.day
-        days_remaining = days_in_month - days_passed
+        if period == 'monthly':
+            start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            _, last_day = calendar.monthrange(now.year, now.month)
+            end_date = now.replace(day=last_day, hour=23, minute=59, second=59, microsecond=999999)
+            days_in_period = last_day
+            days_passed = now.day
+            
+        elif period == 'quarterly':
+            quarter = (now.month - 1) // 3 + 1
+            start_month = (quarter - 1) * 3 + 1
+            start_date = now.replace(month=start_month, day=1, hour=0, minute=0, second=0, microsecond=0)
+            
+            if quarter == 4:
+                end_month = 12
+            else:
+                end_month = start_month + 2
+            _, last_day = calendar.monthrange(now.year, end_month)
+            end_date = now.replace(month=end_month, day=last_day, hour=23, minute=59, second=59, microsecond=999999)
+            
+            days_in_period = (end_date - start_date).days + 1
+            days_passed = (now - start_date).days + 1
+            
+        elif period == 'annual':
+            start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_date = now.replace(month=12, day=31, hour=23, minute=59, second=59, microsecond=999999)
+            
+            days_in_period = 365 if not BudgetService._is_leap_year(now.year) else 366
+            days_passed = (now - start_date).days + 1
+        else:
+            # Default to monthly
+            start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            _, last_day = calendar.monthrange(now.year, now.month)
+            end_date = now.replace(day=last_day, hour=23, minute=59, second=59, microsecond=999999)
+            days_in_period = last_day
+            days_passed = now.day
+        
+        days_remaining = days_in_period - days_passed
 
         # 1. Calculate Actual Spend
         costs_collection = get_collection(Collections.CLOUD_COSTS)

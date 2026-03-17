@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Upload, LogOut, Bell, Search } from 'lucide-react';
+import { LogOut, Bell, Search } from 'lucide-react';
 
-const Header = ({ onUploadClick, onLogout, user = {}, currentView }) => {
+const Header = ({ onLogout, user = {}, currentView, searchQuery = '', onSearchQueryChange }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const isDashboard = !currentView || currentView === 'dashboard';
@@ -31,19 +31,11 @@ const Header = ({ onUploadClick, onLogout, user = {}, currentView }) => {
             <input 
                 type="text" 
                 placeholder="Search resources..." 
+              value={searchQuery}
+              onChange={(e) => onSearchQueryChange && onSearchQueryChange(e.target.value)}
                 className="pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 w-64 transition-all"
             />
         </div>
-        )}
-
-        {isDashboard && (
-        <button
-          onClick={onUploadClick}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 active:bg-blue-800 transition-colors shadow-sm"
-        >
-          <Upload size={16} />
-          <span className="hidden sm:inline">Upload Data</span>
-        </button>
         )}
 
         <div className="h-6 w-px bg-slate-200 mx-1" />

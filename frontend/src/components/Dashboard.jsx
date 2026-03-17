@@ -22,13 +22,13 @@ import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip } from
 import CostChart, { SERIES_COLORS, CATEGORY_COLORS } from './CostChart';
 import FilterBar from './FilterBar';
 import EmptyState from './EmptyState';
-import FileUpload from './FileUpload';
 import api from '../services/api';
 import { useNavigate } from 'react-router-dom';
 
-const Dashboard = ({ showUpload, setShowUpload, globalFilters = {} }) => {
+const Dashboard = ({ globalFilters = {} }) => {
   const navigate = useNavigate();
   const [costs, setCosts] = useState({ trends: [], summary: {} });
+  const [fullDateRange, setFullDateRange] = useState(null);
   const [insights, setInsights] = useState(null);
   const [categoryData, setCategoryData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -69,6 +69,7 @@ const Dashboard = ({ showUpload, setShowUpload, globalFilters = {} }) => {
 
   const handleBreakdownSelect = (optionId) => {
     setBreakdownBy(optionId);
+    setIsBreakdownOpen(false);
   };
 
   const refreshData = async () => {
@@ -95,7 +96,7 @@ const Dashboard = ({ showUpload, setShowUpload, globalFilters = {} }) => {
 
       const [trendRes, insightRes] = await Promise.all([
         api.get(`/costs/trends/auto?${queryParams}`),
-        api.getDashboardInsights().catch(() => ({ data: null }))
+        api.getDashboardInsights(allFilters).catch(() => ({ data: null }))
       ]);
 
       if (insightRes.data?.success && insightRes.data?.has_data) {
@@ -127,13 +128,13 @@ const Dashboard = ({ showUpload, setShowUpload, globalFilters = {} }) => {
           date: t.period,
         }));
 
+        if (trendRes.data.full_date_range) {
+          setFullDateRange(trendRes.data.full_date_range);
+        }
+
         setCosts({
           trends: trends,
-          summary: {
-            ...trendRes.data.summary,
-            // Use full_date_range for month picker if backend provided it (latest_month optimization)
-            ...(trendRes.data.full_date_range ? { date_range: trendRes.data.full_date_range } : {})
-          }
+          summary: trendRes.data.summary
         });
         setHasData(true);
 
@@ -167,7 +168,6 @@ const Dashboard = ({ showUpload, setShowUpload, globalFilters = {} }) => {
       setHasData(false);
     } finally {
       setLoading(false);
-      setShowUpload(false);
     }
   };
 
@@ -183,7 +183,7 @@ const Dashboard = ({ showUpload, setShowUpload, globalFilters = {} }) => {
   // Generate month options from the data's date range
   const monthOptions = useMemo(() => {
     const options = [{ value: 'all', label: 'All Months' }];
-    const range = costs.summary?.date_range;
+    const range = fullDateRange || costs.summary?.date_range;
     if (!range?.start || !range?.end) return options;
 
     const start = new Date(range.start);
@@ -198,7 +198,7 @@ const Dashboard = ({ showUpload, setShowUpload, globalFilters = {} }) => {
       cursor.setMonth(cursor.getMonth() + 1);
     }
     return options;
-  }, [costs.summary?.date_range]);
+  }, [fullDateRange, costs.summary?.date_range]);
 
   // --- Derived Data ---
 
@@ -243,27 +243,6 @@ const Dashboard = ({ showUpload, setShowUpload, globalFilters = {} }) => {
 
   // --- Render Helpers ---
 
-  if (showUpload) {
-    return (
-      <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] flex items-center justify-center z-[1000] p-4">
-        <div className="bg-white rounded-xl border border-slate-200/60 w-full max-w-2xl relative overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100/60 flex justify-between items-center">
-            <h3 className="font-semibold text-slate-800">Upload Cost Data</h3>
-            <button
-              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"
-              onClick={() => setShowUpload(false)}
-            >
-              <ChevronDown className="rotate-45" size={18} />
-            </button>
-          </div>
-          <div className="p-6">
-            <FileUpload onUploadSuccess={refreshData} onSwitchToOverview={refreshData} />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-96 text-slate-400 gap-3">
@@ -274,7 +253,7 @@ const Dashboard = ({ showUpload, setShowUpload, globalFilters = {} }) => {
   }
 
   if (!hasData) {
-    return <EmptyState onUploadClick={() => setShowUpload(true)} />;
+    return <EmptyState onUploadClick={() => navigate('/integrations')} />;
   }
 
   // ====================================================================
@@ -307,9 +286,9 @@ const Dashboard = ({ showUpload, setShowUpload, globalFilters = {} }) => {
 
   const summaryCards = [
     {
-      label: 'Spend Change (7d)',
+      label: 'Spend Change (30d)',
       value: spendChange ? `${spendChange.change_pct > 0 ? '+' : ''}${spendChange.change_pct}%` : '—',
-      sub: spendChange ? `$${spendChange.current_week.toLocaleString(undefined, { maximumFractionDigits: 0 })} this week` : '',
+      sub: spendChange ? `$${spendChange.current_period.toLocaleString(undefined, { maximumFractionDigits: 0 })} this month` : '',
       icon: DollarSign,
       iconColor: 'text-slate-400',
       trend: spendChange?.change_pct ?? null,
@@ -605,7 +584,7 @@ const Dashboard = ({ showUpload, setShowUpload, globalFilters = {} }) => {
                             ? 'bg-blue-50 text-blue-700 font-semibold'
                             : 'text-slate-600 hover:bg-slate-50'
                         }`}
-                        onClick={() => setSelectedMonth(option.value)}
+                        onClick={() => { setSelectedMonth(option.value); setIsMonthOpen(false); }}
                       >
                         {option.label}
                       </button>

@@ -70,9 +70,9 @@ const Reports = () => {
             const contentDisposition = response.headers['content-disposition'];
             let filename = `report_${reportId}_${Date.now()}.pdf`;
             if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+                const filenameMatch = contentDisposition.match(/filename="([^"]+)"|filename=([^;\s]+)/);
                 if (filenameMatch) {
-                    filename = filenameMatch[1];
+                    filename = filenameMatch[1] || filenameMatch[2];
                 }
             }
             
@@ -109,7 +109,7 @@ const Reports = () => {
             
             // Show friendly error message
             if (errorMessage.includes('No cost data') || errorMessage.includes('No data found') || errorMessage.includes('not found')) {
-                alert('No data available for this report.\n\nPlease upload cost data first by going to:\nDashboard → Upload Data or Integrations → Cloud Integration');
+                alert('No data available for this report.\n\nPlease upload cost data first by going to:\nIntegrations → Cloud Integration');
             } else {
                 alert(errorMessage);
             }

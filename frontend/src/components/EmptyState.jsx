@@ -12,7 +12,7 @@ const EmptyState = ({ onUploadClick }) => {
                 
                 <h2 className="text-slate-900 mb-3 text-2xl font-bold">Welcome to Cloud Insight</h2>
                 <p className="text-slate-500 mb-8 leading-relaxed max-w-sm mx-auto">
-                    Upload your cloud cost data (CSV) to unlock instant analytics, anomaly detection, and forecasting.
+                    Connect your cloud account or upload billing files from the Integrations module to unlock analytics, anomaly detection, and forecasting.
                 </p>
 
                 <div className="flex justify-center mb-8">
@@ -21,7 +21,7 @@ const EmptyState = ({ onUploadClick }) => {
                         className="bg-blue-600 text-white border border-transparent px-8 py-3 rounded-lg text-base font-semibold inline-flex items-center gap-2.5 transition-colors shadow-sm hover:bg-blue-700"
                     >
                         <Upload size={20} />
-                        Upload Cost Data
+                        Open Integrations
                     </button>
                 </div>
 

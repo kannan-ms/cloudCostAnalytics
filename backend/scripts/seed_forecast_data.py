@@ -3,7 +3,6 @@ import os
 import pandas as pd
 from datetime import datetime
 from pymongo import MongoClient
-from bson import ObjectId
 
 # Add backend to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -73,11 +72,6 @@ def seed_data(filepath, user_email='hari@gmail.com'):
                 pass
                 
     if records:
-        # Clear existing data for strict testing? Or append?
-        # Let's append but maybe warn.
-        # actually, let's clear to avoid duplicates for clean forecast
-        # db.cloud_costs.delete_many({"user_id": user_id, "resource_id": "aggregated_import"})
-        
         result = db.cloud_costs.insert_many(records)
         print(f"Successfully inserted {len(result.inserted_ids)} records for {user_email}")
     else:

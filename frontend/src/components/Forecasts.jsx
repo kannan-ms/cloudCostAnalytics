@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-    Loader, BarChart3, UserCheck, TrendingUp, TrendingDown, Minus,
+    Loader, BarChart3, TrendingUp, TrendingDown, Minus,
     DollarSign, ShieldCheck, Activity, Gauge, CalendarClock,
     AlertTriangle, ChevronDown, ChevronUp, ArrowUpRight, ArrowDownRight
 } from 'lucide-react';
@@ -10,7 +10,7 @@ import {
     ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, ReferenceLine, ReferenceArea
 } from 'recharts';
-import { CHART_COLORS, ChartGradients, XAxisProps, YAxisProps, GridProps } from '../utils/chartConfig.jsx';
+import { XAxisProps, YAxisProps, GridProps } from '../utils/chartConfig.jsx';
 
 /* ------------------------------------------------------------------ */
 /*  Predictive Insight Cards                                          */
@@ -24,32 +24,11 @@ const CARD_CONFIG = [
         accent: 'border-l-blue-400',
     },
     {
-        key: 'growth',
-        label: 'Cost Growth Rate',
-        icon: Activity,
-        iconColor: 'text-slate-400',
-        accent: 'border-l-amber-400',
-    },
-    {
         key: 'confidence',
         label: 'Forecast Confidence',
         icon: Gauge,
         iconColor: 'text-slate-400',
         accent: 'border-l-emerald-400',
-    },
-    {
-        key: 'risk',
-        label: 'Risk Level',
-        icon: ShieldCheck,
-        iconColor: 'text-slate-400',
-        accent: 'border-l-rose-400',
-    },
-    {
-        key: 'exhaustion',
-        label: 'Est. Budget Exhaustion',
-        icon: CalendarClock,
-        iconColor: 'text-slate-400',
-        accent: 'border-l-violet-400',
     },
 ];
 
@@ -421,7 +400,7 @@ const Forecasts = () => {
 
             {/* -------- Predictive Insight Cards -------- */}
             {cardValues && (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {CARD_CONFIG.map(cfg => (
                         <InsightCard key={cfg.key} config={cfg} data={cardValues[cfg.key]} />
                     ))}

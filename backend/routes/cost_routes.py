@@ -988,6 +988,12 @@ def get_dashboard_insights(current_user_id):
     OPTIMIZED: Fetches all user cost data once, computes everything in Python.
     Returns: spend change, top cost driver, anomaly count,
     fastest growing service, category distribution, and text insights.
+    
+    Query Parameters:
+    - service: Filter by service name
+    - provider: Filter by provider (AWS, Azure, GCP)
+    - region: Filter by region
+    - account: Filter by cloud account ID
     """
     try:
         from bson import ObjectId
@@ -995,15 +1001,33 @@ def get_dashboard_insights(current_user_id):
         from datetime import datetime, timedelta
         from ml.category_mapper import map_service_to_category
 
+        # Extract optional filters
+        service_filter = request.args.get('service')
+        provider_filter = request.args.get('provider')
+        region_filter = request.args.get('region')
+        account_filter = request.args.get('account')
+
         costs_col = get_collection(Collections.CLOUD_COSTS)
         user_oid = ObjectId(current_user_id)
 
         # --------------------------------------------------
-        # SINGLE DB QUERY: Fetch all user cost records (only needed fields)
+        # SINGLE DB QUERY: Fetch user cost records with filters applied
         # --------------------------------------------------
+        query = {"user_id": user_oid}
+        
+        # Apply filters
+        if service_filter and service_filter != 'No Filters Applied':
+            query["service_name"] = {"$regex": service_filter, "$options": "i"}
+        if provider_filter and provider_filter != 'No Filters Applied':
+            query["provider"] = provider_filter
+        if region_filter and region_filter != 'No Filters Applied':
+            query["region"] = region_filter
+        if account_filter and account_filter != 'No Filters Applied':
+            query["cloud_account_id"] = account_filter
+
         all_docs = list(costs_col.find(
-            {"user_id": user_oid},
-            {"service_name": 1, "cost": 1, "usage_start_date": 1, "_id": 0}
+            query,
+            {"service_name": 1, "cost": 1, "usage_start_date": 1, "provider": 1, "_id": 0}
         ))
 
         if not all_docs:
@@ -1021,28 +1045,21 @@ def get_dashboard_insights(current_user_id):
                 "date": d
             })
 
-        # Compute date boundaries
-        dates = [c["date"] for c in costs_data if c["date"]]
-        if not dates:
-            return jsonify({"success": True, "has_data": False}), 200
-
-        min_date = min(dates)
-        max_date = max(dates)
-
-        # Use relative windows from max_date
-        week_start = max_date - timedelta(days=6)
-        prev_week_start = week_start - timedelta(days=7)
-        prev_week_end = week_start - timedelta(seconds=1)
+        # Compute date boundaries - use TODAY as reference, not max_date from old data
+        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        current_period_start = today - timedelta(days=29)  # Last 30 days
+        previous_period_start = current_period_start - timedelta(days=30)  # Previous 30 days
+        previous_period_end = current_period_start - timedelta(seconds=1)
 
         # --------------------------------------------------
-        # 2. Spend change (computed in-memory)
+        # 2. Spend change (last 30 days vs previous 30 days) - computed in-memory
         # --------------------------------------------------
-        current_week_spend = sum(c["cost"] for c in costs_data if c["date"] and week_start <= c["date"] <= max_date)
-        prev_week_spend = sum(c["cost"] for c in costs_data if c["date"] and prev_week_start <= c["date"] <= prev_week_end)
+        current_period_spend = sum(c["cost"] for c in costs_data if c["date"] and current_period_start <= c["date"] <= today)
+        previous_period_spend = sum(c["cost"] for c in costs_data if c["date"] and previous_period_start <= c["date"] <= previous_period_end)
 
         spend_change_pct = 0
-        if prev_week_spend > 0:
-            spend_change_pct = round(((current_week_spend - prev_week_spend) / prev_week_spend) * 100, 1)
+        if previous_period_spend > 0:
+            spend_change_pct = round(((current_period_spend - previous_period_spend) / previous_period_spend) * 100, 1)
 
         # --------------------------------------------------
         # 3. Top cost driver & total cost (computed in-memory)
@@ -1067,10 +1084,10 @@ def get_dashboard_insights(current_user_id):
         anomaly_count = anomaly_col.count_documents({"user_id": user_oid})
 
         # --------------------------------------------------
-        # 5. Fastest growing service (in-memory)
+        # 5. Fastest growing service (in-memory) - compare first vs second half of 30 days
         # --------------------------------------------------
-        data_span = (max_date - min_date).days
-        mid_date = min_date + timedelta(days=data_span // 2)
+        period_span = 30
+        mid_date = current_period_start + timedelta(days=period_span // 2)
 
         svc_halves = {}
         for c in costs_data:
@@ -1112,7 +1129,7 @@ def get_dashboard_insights(current_user_id):
         for c in costs_data:
             svc = c["service"]
             svc_periods.setdefault(svc, {"recent": 0, "older": 0})
-            if c["date"] and c["date"] >= week_start:
+            if c["date"] and c["date"] >= mid_date:  # Recent half of the period
                 svc_periods[svc]["recent"] += c["cost"]
             else:
                 svc_periods[svc]["older"] += c["cost"]
@@ -1144,9 +1161,14 @@ def get_dashboard_insights(current_user_id):
         return jsonify({
             "success": True,
             "has_data": True,
+            "period": {
+                "current_period_start": current_period_start.isoformat(),
+                "current_period_end": today.isoformat(),
+                "days": 30
+            },
             "spend_change": {
-                "current_week": round(current_week_spend, 2),
-                "previous_week": round(prev_week_spend, 2),
+                "current_period": round(current_period_spend, 2),
+                "previous_period": round(previous_period_spend, 2),
                 "change_pct": spend_change_pct
             },
             "top_driver": top_driver,

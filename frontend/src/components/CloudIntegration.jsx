@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Cloud,
   Upload,
@@ -69,6 +70,7 @@ const PROVIDERS = [
 
 // ─── Component ───────────────────────────────────────────────────────────────
 const CloudIntegration = () => {
+  const navigate = useNavigate();
   // Tabs: 'file' | 'api'
   const [tab, setTab] = useState('file');
   const [provider, setProvider] = useState('');
@@ -157,6 +159,19 @@ const CloudIntegration = () => {
   };
 
   const reset = () => {
+    // Reset only the file/result for uploading another file from same provider
+    setFile(null);
+    setResult(null);
+    setError(null);
+    setCredentials({});
+    setStartDate('');
+    setEndDate('');
+  };
+
+  const resetFull = () => {
+    // Complete reset including provider
+    setProvider('');
+    setTab('file');
     setFile(null);
     setResult(null);
     setError(null);
@@ -177,7 +192,7 @@ const CloudIntegration = () => {
           Cloud Integration
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          Connect your cloud billing data from Azure, AWS, or GCP — via file upload or direct API.
+          Connect your cloud billing data from Azure, AWS, or GCP — via file upload or direct API. <strong>All data from multiple providers will be combined on your dashboard.</strong>
         </p>
       </div>
 
@@ -435,6 +450,13 @@ const CloudIntegration = () => {
           </div>
 
           <div className="p-6 space-y-6">
+            {/* Info box about multi-provider */}
+            <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800">
+              <Cloud size={18} className="mt-0.5 flex-shrink-0" />
+              <span>
+                Your {selectedProvider?.name} data has been ingested successfully. You can now upload data from <strong>another cloud provider</strong> to combine them on your dashboard.
+              </span>
+            </div>
             {/* Summary cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <SummaryCard
@@ -528,12 +550,21 @@ const CloudIntegration = () => {
               </div>
             )}
 
-            <button
-              onClick={reset}
-              className="w-full px-5 py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold text-sm hover:bg-slate-200 transition-colors"
-            >
-              Run Another Ingestion
-            </button>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => navigate('/')}
+                className="flex-1 px-5 py-3 bg-blue-600 text-white rounded-xl font-semibold text-sm hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <BarChart3 size={18} />
+                View Dashboard
+              </button>
+              <button
+                onClick={reset}
+                className="flex-1 px-5 py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold text-sm hover:bg-slate-200 transition-colors"
+              >
+                Upload Another
+              </button>
+            </div>
           </div>
         </section>
       )}

@@ -2,7 +2,6 @@
 import sys
 import os
 import logging
-from datetime import datetime
 from bson import ObjectId
 
 # Add backend to path
@@ -10,7 +9,6 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from database import Database, get_collection, Collections
 from services.anomaly_detector import run_anomaly_detection_for_user
-from services.file_parser import parse_csv
 from schemas import User
 
 # Setup logging
@@ -46,12 +44,6 @@ def test_flow():
         print("Seeding data from azureDataset.csv...")
         dataset_path = os.path.join(os.path.dirname(__file__), 'dataSet', 'azureDataset.csv')
         if os.path.exists(dataset_path):
-             # We need to manually parse because file_parser might expect a file object
-             # Let's just read it and insert manually for this test if needed, 
-             # OR use the parse_csv function if adaptable.
-             # Actually, let's just insert some dummy processed data if the parser is complex.
-             # But wait, the user has a csv. Let's try to use the csv.
-             
              import pandas as pd
              df = pd.read_csv(dataset_path)
              # Map columns roughly to schema

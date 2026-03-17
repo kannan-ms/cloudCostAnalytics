@@ -7,7 +7,8 @@ const CreateBudgetModal = ({ isOpen, onClose, onCreate }) => {
         amount: '',
         scopeType: 'global',
         scopeValue: '',
-        thresholds: '50, 80, 100'
+        thresholds: '50, 80, 100',
+        period: 'monthly'
     });
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -32,7 +33,7 @@ const CreateBudgetModal = ({ isOpen, onClose, onCreate }) => {
                     value: formData.scopeType === 'global' ? null : formData.scopeValue
                 },
                 thresholds: formData.thresholds.split(',').map(t => parseFloat(t.trim())),
-                period: 'monthly'
+                period: formData.period
             };
 
             if (isNaN(budgetPayload.amount) || budgetPayload.amount <= 0) {
@@ -50,7 +51,8 @@ const CreateBudgetModal = ({ isOpen, onClose, onCreate }) => {
                 amount: '',
                 scopeType: 'global',
                 scopeValue: '',
-                thresholds: '50, 80, 100'
+                thresholds: '50, 80, 100',
+                period: 'monthly'
             });
         } catch (err) {
             setError(err.message);
@@ -107,8 +109,15 @@ const CreateBudgetModal = ({ isOpen, onClose, onCreate }) => {
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Period</label>
-                            <select disabled className="w-full px-3 py-2 border border-gray-100 bg-gray-50 text-gray-500 rounded-lg cursor-not-allowed">
-                                <option>Monthly</option>
+                            <select
+                                name="period"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white"
+                                value={formData.period}
+                                onChange={handleChange}
+                            >
+                                <option value="monthly">Monthly</option>
+                                <option value="quarterly">Quarterly</option>
+                                <option value="annual">Annual</option>
                             </select>
                         </div>
                     </div>

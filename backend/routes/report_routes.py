@@ -199,7 +199,7 @@ def download_report(current_user_id, report_type):
         # Create response with generated file
         response = make_response(payload)
         response.headers['Content-Type'] = mime_type
-        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+        response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
         if fmt == 'pdf' and filename.endswith('.txt'):
             response.headers['X-Report-Format-Fallback'] = 'txt'
         

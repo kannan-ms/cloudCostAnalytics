@@ -9,11 +9,30 @@ import ServiceAnalysis from './ServiceAnalysis';
 import AnomaliesPage from './AnomaliesPage';
 
 const DashboardPage = ({ view }) => {
-    const [showUpload, setShowUpload] = useState(false);
     const [globalFilters, setGlobalFilters] = useState({});
+    const [searchQuery, setSearchQuery] = useState('');
 
     const handleGlobalFilterChange = (newFilters) => {
-        setGlobalFilters(newFilters);
+        // Preserve header search filter while allowing sidebar/global filters to update.
+        if (searchQuery.trim()) {
+            setGlobalFilters({ ...newFilters, service: searchQuery.trim() });
+        } else {
+            setGlobalFilters(newFilters);
+        }
+    };
+
+    const handleSearchQueryChange = (value) => {
+        setSearchQuery(value);
+        setGlobalFilters((prev) => {
+            const next = { ...prev };
+            const trimmed = value.trim();
+            if (trimmed) {
+                next.service = trimmed;
+            } else {
+                delete next.service;
+            }
+            return next;
+        });
     };
 
     let content;
@@ -38,18 +57,17 @@ const DashboardPage = ({ view }) => {
             break;
         default:
             content = <Dashboard 
-                showUpload={showUpload} 
-                setShowUpload={setShowUpload} 
                 globalFilters={globalFilters}
             />;
     }
 
     return (
         <MainLayout 
-            onUploadClick={() => setShowUpload(true)}
             globalFilters={globalFilters}
             onGlobalFilterChange={handleGlobalFilterChange}
             currentView={view}
+            searchQuery={searchQuery}
+            onSearchQueryChange={handleSearchQueryChange}
         >
             {content}
         </MainLayout>

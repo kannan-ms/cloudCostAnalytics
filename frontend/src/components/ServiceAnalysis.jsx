@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  ArrowLeft, Search, Loader2, Layers, BarChart2, LineChart, AreaChart,
-  TrendingUp, TrendingDown, DollarSign, Database
+  ArrowLeft, Search, Loader2, Database
 } from 'lucide-react';
-import CostChart, { SERIES_COLORS } from './CostChart';
+import CostChart from './CostChart';
 import api from '../services/api';
 
 const ServiceAnalysis = ({ globalFilters = {} }) => {

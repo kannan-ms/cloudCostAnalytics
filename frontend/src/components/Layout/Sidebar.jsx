@@ -7,45 +7,18 @@ import {
   ChevronDown,
   Filter,
   Cloud,
-  PieChart,
   Plug,
   Layers,
-  Activity,
   AlertTriangle
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import api from '../../services/api';
 
 const Sidebar = ({ globalFilters = {}, onGlobalFilterChange }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [filterOptions, setFilterOptions] = useState({
-    providers: [],
-    accounts: [],
-    regions: [],
-    services: []
-  });
-
   const [user, setUser] = useState({ name: 'Guest', email: '' });
 
   useEffect(() => {
-    const fetchFilterOptions = async () => {
-      try {
-        const res = await api.get('/costs/filters');
-        if (res.data.success) {
-          setFilterOptions({
-            providers: res.data.providers || [],
-            accounts: res.data.accounts || [],
-            regions: res.data.regions || [],
-            services: res.data.services || []
-          });
-        }
-      } catch (err) {
-        console.error('Failed to fetch filter options:', err);
-      }
-    };
-    fetchFilterOptions();
-
     // Load user from localStorage
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
@@ -65,7 +38,6 @@ const Sidebar = ({ globalFilters = {}, onGlobalFilterChange }) => {
         .toUpperCase()
         .slice(0, 2);
   };
-
 
   const handleEnvironmentChange = (e) => {
     const value = e.target.value;

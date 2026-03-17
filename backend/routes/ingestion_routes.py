@@ -6,18 +6,99 @@ Supports both CSP API connectivity and CSV file upload.
 import os
 import tempfile
 import logging
+from datetime import datetime
 from flask import Blueprint, request, jsonify
 from functools import wraps
 import jwt
+import pandas as pd
 from config import Config
 from services import user_service
 from services.cloud_cost_ingestion import fetch_cloud_cost_data
 from ml.category_mapper import SERVICE_CATEGORIES
 from services.anomaly_detector import detect_anomalies_from_dataframe
+from services.cost_service import bulk_ingest_costs
 
 logger = logging.getLogger(__name__)
 
 ingestion_routes = Blueprint("ingestion", __name__, url_prefix="/api/ingestion")
+
+
+def _persist_normalized_costs(user_id: str, result_df):
+    """Persist normalized ingestion rows into cloud_costs using existing service validation."""
+    records = []
+    for _, row in result_df.iterrows():
+        row_date = row.get("date")
+        
+        # Handle missing or invalid dates - use today
+        if hasattr(row_date, "to_pydatetime"):
+            row_date = row_date.to_pydatetime()
+        
+        try:
+            if row_date is None or pd.isna(row_date):
+                # If no date, use today
+                row_date = datetime.utcnow()
+            elif isinstance(row_date, str):
+                try:
+                    row_date = datetime.fromisoformat(row_date.replace('Z', '+00:00'))
+                except:
+                    row_date = datetime.utcnow()
+        except:
+            row_date = datetime.utcnow()
+
+        # The normalized ingestion output uses category-level aggregation.
+        # Persist category as service_name so downstream analytics remain consistent.
+        records.append({
+            "provider": str(row.get("provider", "Other")).strip().title(),
+            "service_name": str(row.get("category", "Other")).strip() or "Other",
+            "cost": float(row.get("cost", 0) or 0),
+            "usage_start_date": row_date,
+            "usage_end_date": row_date,
+            "region": row.get("region", "global"),
+            "currency": "USD",
+            "cloud_account_id": row.get("account_id", ""),
+            "usage_quantity": float(row.get("usage_quantity", 0)) if row.get("usage_quantity") else 0,
+            "usage_unit": row.get("usage_unit", ""),
+            "tags": row.get("tags", {}) if isinstance(row.get("tags"), dict) else {},
+            "metadata": {
+                "source": "ingestion",
+                "aggregation": "category_daily",
+                "ingested_at": datetime.utcnow().isoformat()
+            }
+        })
+
+    if not records:
+        return True, {
+            "total_records": 0,
+            "success_count": 0,
+            "error_count": 0,
+            "errors": []
+        }
+
+    total_records = len(records)
+    total_success = 0
+    total_errors = 0
+    merged_errors = []
+
+    for start in range(0, total_records, 1000):
+        chunk = records[start:start + 1000]
+        ok, chunk_result = bulk_ingest_costs(user_id, chunk)
+        if not ok:
+            return False, {
+                "error": chunk_result.get("error", "Bulk ingestion failed")
+            }
+
+        total_success += chunk_result.get("success_count", 0)
+        total_errors += chunk_result.get("error_count", 0)
+        chunk_errors = chunk_result.get("errors", [])
+        if chunk_errors:
+            merged_errors.extend(chunk_errors)
+
+    return True, {
+        "total_records": total_records,
+        "success_count": total_success,
+        "error_count": total_errors,
+        "errors": merged_errors[:10]
+    }
 
 
 # ── Auth decorator (same pattern as cost_routes) ─────────────────────────
@@ -85,21 +166,29 @@ def ingest_from_api(current_user_id):
     if not success:
         return jsonify({"error": result}), 400
 
+    ingest_ok, ingest_result = _persist_normalized_costs(current_user_id, result)
+    if not ingest_ok:
+        return jsonify({"error": ingest_result.get("error", "Failed to persist ingested data")}), 500
+
+    # Log successful ingestion
+    logger.info(f"API ingestion completed: {ingest_result['success_count']} records inserted, {ingest_result['error_count']} errors")
+    
     # result is a normalised DataFrame
     summary = {
-        "rows": len(result),
-        "categories": result["category"].unique().tolist(),
+        "rows_ingest": len(result),
+        "categories": result["category"].unique().tolist() if len(result) > 0 else [],
         "date_range": {
-            "from": str(result["date"].min().date()),
-            "to": str(result["date"].max().date()),
+            "from": str(result["date"].min().date()) if len(result) > 0 else "N/A",
+            "to": str(result["date"].max().date()) if len(result) > 0 else "N/A",
         },
-        "total_cost": round(float(result["cost"].sum()), 2),
-        "data": result.to_dict(orient="records"),
+        "total_cost": round(float(result["cost"].sum()), 2) if len(result) > 0 else 0,
+        "database_insert": {
+            "success_count": ingest_result["success_count"],
+            "error_count": ingest_result["error_count"],
+            "inserted_ids": ingest_result.get("inserted_ids", [])[:10]
+        },
+        "errors": ingest_result.get("errors", [])[:5] if ingest_result.get("errors") else []
     }
-
-    # Convert Timestamps to strings for JSON serialisation
-    for rec in summary["data"]:
-        rec["date"] = str(rec["date"].date()) if hasattr(rec["date"], "date") else str(rec["date"])
 
     return jsonify({"success": True, "summary": summary}), 200
 
@@ -145,18 +234,31 @@ def ingest_from_file(current_user_id):
     if not success:
         return jsonify({"error": result}), 400
 
+    ingest_ok, ingest_result = _persist_normalized_costs(current_user_id, result)
+    if not ingest_ok:
+        return jsonify({"error": ingest_result.get("error", "Failed to persist ingested data")}), 500
+
+    # Log successful ingestion
+    logger.info(f"File ingestion completed: {ingest_result['success_count']} records inserted, {ingest_result['error_count']} errors")
+    
     summary = {
-        "rows": len(result),
-        "categories": result["category"].unique().tolist(),
+        "rows_ingest": len(result),
+        "categories": result["category"].unique().tolist() if len(result) > 0 else [],
         "date_range": {
-            "from": str(result["date"].min().date()),
-            "to": str(result["date"].max().date()),
+            "from": str(result["date"].min().date()) if len(result) > 0 else "N/A",
+            "to": str(result["date"].max().date()) if len(result) > 0 else "N/A",
         },
-        "total_cost": round(float(result["cost"].sum()), 2),
-        "data": result.to_dict(orient="records"),
+        "total_cost": round(float(result["cost"].sum()), 2) if len(result) > 0 else 0,
+        "database_insert": {
+            "success_count": ingest_result["success_count"],
+            "error_count": ingest_result["error_count"],
+            "inserted_ids": ingest_result.get("inserted_ids", [])[:10]  # Show first 10
+        },
+        "errors": ingest_result.get("errors", [])[:5] if ingest_result.get("errors") else []
     }
-    for rec in summary["data"]:
-        rec["date"] = str(rec["date"].date()) if hasattr(rec["date"], "date") else str(rec["date"])
+    for rec in summary.get("data", []):
+        if "date" in rec:
+            rec["date"] = str(rec["date"].date()) if hasattr(rec["date"], "date") else str(rec["date"])
 
     return jsonify({"success": True, "summary": summary}), 200
 
@@ -220,19 +322,56 @@ def ingest_and_detect(current_user_id):
     if not success:
         return jsonify({"error": result}), 400
 
+    ingest_ok, ingest_result = _persist_normalized_costs(current_user_id, result)
+    if not ingest_ok:
+        return jsonify({"error": ingest_result.get("error", "Failed to persist ingested data")}), 500
+
     # Run ML anomaly detection on the normalized DataFrame
     anomalies = detect_anomalies_from_dataframe(result)
+    
+    # Store detected anomalies to database
+    if anomalies:
+        try:
+            from database import get_collection, Collections
+            from bson import ObjectId
+            
+            anomalies_col = get_collection(Collections.ANOMALIES)
+            anomaly_docs = []
+            for anom in anomalies:
+                anom_doc = {
+                    "user_id": ObjectId(current_user_id),
+                    "service_name": anom.get("service_name"),
+                    "detected_value": anom.get("detected_value"),
+                    "expected_value": anom.get("expected_value"),
+                    "deviation_percentage": anom.get("deviation_percentage"),
+                    "severity": anom.get("severity"),
+                    "message": anom.get("message"),
+                    "detected_at": anom.get("detected_at", datetime.utcnow()),
+                    "created_at": datetime.utcnow()
+                }
+                anomaly_docs.append(anom_doc)
+            
+            if anomaly_docs:
+                anomalies_col.insert_many(anomaly_docs)
+                logger.info(f"Stored {len(anomaly_docs)} anomalies for user {current_user_id}")
+        except Exception as e:
+            logger.error(f"Failed to store anomalies: {e}")
 
     return jsonify({
         "success": True,
         "ingestion": {
-            "rows": len(result),
-            "categories": result["category"].unique().tolist(),
-            "total_cost": round(float(result["cost"].sum()), 2),
+            "rows_processed": len(result) if len(result) > 0 else 0,
+            "categories": result["category"].unique().tolist() if len(result) > 0 else [],
+            "total_cost": round(float(result["cost"].sum()), 2) if len(result) > 0 else 0,
+            "database_insert": {
+                "success_count": ingest_result["success_count"],
+                "error_count": ingest_result["error_count"]
+            },
         },
-        "anomalies": {
-            "total_detected": len(anomalies),
-            "items": anomalies,
+        "anomalies_detected": {
+            "total": len(anomalies),
+            "stored": len(anomalies),
+            "items": anomalies[:10]  # Show first 10
         },
     }), 200
 

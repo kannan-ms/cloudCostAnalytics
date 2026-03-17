@@ -9,26 +9,10 @@ export default {
       colors: {
         primary: {
           blue: '#2962ff',
-          hover: '#1e54e4',
         },
         sidebar: {
           bg: '#0b1136',
-          hover: '#16204e',
-          text: '#ffffff',
           'text-muted': '#8b9bb4',
-        },
-        text: {
-          dark: '#1a1f36',
-          medium: '#4c5a75',
-          light: '#8792a2',
-        },
-        border: {
-          light: '#e0e6ed',
-        },
-        status: {
-          success: '#00c853',
-          warning: '#ffab00',
-          error: '#ff3d00',
         },
       },
       fontFamily: {

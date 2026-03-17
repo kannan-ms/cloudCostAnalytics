@@ -90,10 +90,6 @@ def validate_cost_data(data: Dict) -> Tuple[bool, Optional[str]]:
         
         if start_date > end_date:
             return False, "usage_start_date must be before or equal to usage_end_date"
-        
-        # future date check removed to allow forecasting/planning data
-        # if start_date > datetime.utcnow():
-        #    return False, "usage_start_date cannot be in the future"
             
     except (ValueError, TypeError) as e:
         return False, f"Invalid date format. Use ISO 8601 format (YYYY-MM-DDTHH:MM:SS): {str(e)}"
@@ -1009,7 +1005,7 @@ def get_auto_trends(user_id: str, breakdown_by: str = 'service', filters: Dict =
         
         if filters:
             if filters.get('service') and filters['service'] != 'No Filters Applied':
-                match_stage['service_name'] = filters['service']
+                match_stage['service_name'] = {"$regex": str(filters['service']), "$options": "i"}
             if filters.get('region') and filters['region'] != 'No Filters Applied':
                 match_stage['region'] = filters['region']
             if filters.get('account') and filters['account'] != 'No Filters Applied':

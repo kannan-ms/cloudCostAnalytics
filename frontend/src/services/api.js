@@ -43,7 +43,16 @@ api.getTrends = () => api.get('/costs/trends'); // General trends endpoint
 
 api.getAnomalies = () => api.get('/anomalies');
 api.getCostSummary = () => api.get('/costs/summary');
-api.getDashboardInsights = () => api.get('/costs/dashboard-insights');
+api.getDashboardInsights = (filters = {}) => {
+  const params = new URLSearchParams();
+  if (filters.service) params.append('service', filters.service);
+  if (filters.provider) params.append('provider', filters.provider);
+  if (filters.region) params.append('region', filters.region);
+  if (filters.account) params.append('account', filters.account);
+  
+  const queryString = params.toString();
+  return api.get(`/costs/dashboard-insights${queryString ? '?' + queryString : ''}`);
+};
 
 // Category-level daily trends for a single month
 api.getCategoryDailyTrends = (month) => api.get('/costs/trends/category-daily', { params: { month } });

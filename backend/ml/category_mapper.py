@@ -140,6 +140,16 @@ _KEYWORD_RULES = [
 # Used for O(1) hits on repeated lookups.
 _EXACT_MAP: Dict[str, str] = {}
 
+_CANONICAL_CATEGORY_LABELS: Dict[str, str] = {
+    "compute": "Compute",
+    "storage": "Storage",
+    "database": "Database",
+    "networking": "Networking",
+    "management": "Management",
+    "security": "Security",
+    "other": "Other",
+}
+
 # Runtime cache for substring matches
 _CACHE: Dict[str, str] = {}
 
@@ -162,6 +172,10 @@ def map_service_to_category(service_name: str) -> str:
         return "Other"
 
     key = service_name.strip().lower()
+
+    # 0. Canonical category labels from normalized ingestion should pass through.
+    if key in _CANONICAL_CATEGORY_LABELS:
+        return _CANONICAL_CATEGORY_LABELS[key]
 
     # 1. Check exact cache first
     if key in _CACHE:
