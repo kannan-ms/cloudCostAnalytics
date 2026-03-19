@@ -78,7 +78,7 @@ const AnomalyList = ({ anomalies, onAnomalyClick }) => {
               <span className="text-xs text-slate-400 font-medium">{new Date(date).toLocaleDateString()}</span>
             </div>
 
-            {/* Main Info */}
+            {/* Main Info about the anomolies */}
             <div className="mb-4">
                 <h4 className="font-bold text-slate-800 text-base">{service}</h4>
                 <div className="flex items-center gap-1.5 text-red-600 mt-1">
