@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { AlertTriangle, TrendingUp, CheckCircle, AlertOctagon, Info } from 'lucide-react';
 
 const AnomalyList = ({ anomalies, onAnomalyClick }) => {
