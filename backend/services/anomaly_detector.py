@@ -10,6 +10,8 @@ from typing import Dict, List, Tuple, Optional
 from bson import ObjectId
 from database import get_collection, Collections
 from schemas import Anomaly
+from services import user_service
+from services import email_service
 from ml.category_mapper import SERVICE_CATEGORIES, get_category
 
 # Setup logging
@@ -25,7 +27,7 @@ try:
     ML_AVAILABLE = True
 except ImportError as e:
     ML_AVAILABLE = False
-    print(f"ML libraries missed: {e}")
+    logger.warning("ML libraries missing: %s", e)
 
 # Base Paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -213,7 +215,7 @@ def detect_anomalies_ml(user_id: str) -> List[Dict]:
                 
         return anomalies
     except Exception as e:
-        print(f"ML Global error: {e}")
+        logger.exception("ML Global error")
         return []
 
 
@@ -274,6 +276,10 @@ def run_anomaly_detection_for_user(user_id: str) -> Tuple[bool, any]:
         
         if new_docs:
             anomalies_collection.insert_many(new_docs)
+            try:
+                _send_email_alerts(user_id, new_docs)
+            except Exception as e:
+                logger.error(f"Email alert dispatch failed: {e}")
             
         return True, {
             "total_detected": len(ml_anomalies),
@@ -458,3 +464,21 @@ def detect_anomalies_from_dataframe(ingested_df) -> List[Dict]:
 
 # Alias
 run_anomaly_detection = run_anomaly_detection_for_user
+
+
+def _send_email_alerts(user_id: str, anomalies: List[Dict]) -> None:
+    """Send or queue email alerts for newly stored anomalies."""
+    user = user_service.get_user_by_id(user_id)
+    if not user:
+        logger.info("Email alerts skipped: user not found", extra={"user_id": user_id})
+        return
+
+    for anomaly in anomalies:
+        email_service.queue_anomaly_email(
+            user=user,
+            anomaly_type=anomaly.get("service_name", "Cloud Service"),
+            detected_value=anomaly.get("detected_value"),
+            expected_value=anomaly.get("expected_value"),
+            detected_at=anomaly.get("detected_at"),
+            recommendation=anomaly.get("recommendation") or "Review recent cost changes for this service."
+        )

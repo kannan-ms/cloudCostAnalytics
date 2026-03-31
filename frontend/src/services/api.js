@@ -37,10 +37,6 @@ api.getDailyTrends = (startDate, endDate) => {
   if (endDate) params.end_date = endDate;
   return api.get('/costs/trends/daily', { params });
 };
-// Updated to simpler endpoints
-api.getSummary = () => api.get('/summary'); // Assuming backend provides /api/summary for dashboard overview
-api.getTrends = () => api.get('/costs/trends'); // General trends endpoint
-
 api.getAnomalies = () => api.get('/anomalies');
 api.getCostSummary = () => api.get('/costs/summary');
 api.getDashboardInsights = (filters = {}) => {

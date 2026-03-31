@@ -14,11 +14,11 @@ forecast_routes = Blueprint('forecasts', __name__, url_prefix='/api/forecasts')
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = None
-        if 'Authorization' in request.headers:
-            token = request.headers['Authorization'].split(" ")[1]
-        if not token:
-            return jsonify({'error': 'Authentication token is missing'}), 401
+        auth_header = request.headers.get('Authorization', '')
+        parts = auth_header.split()
+        if len(parts) != 2 or parts[0].lower() != 'bearer':
+            return jsonify({'error': 'Invalid token format. Use: Bearer <token>'}), 401
+        token = parts[1]
         try:
             payload = jwt.decode(token, Config.JWT_SECRET_KEY, algorithms=[Config.JWT_ALGORITHM])
             current_user_id = payload['user_id']

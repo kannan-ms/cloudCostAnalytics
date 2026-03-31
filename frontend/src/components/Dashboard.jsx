@@ -157,14 +157,13 @@ const Dashboard = ({ globalFilters = {} }) => {
               setCategoryData(catRes.data);
             }
           } catch (catErr) {
-            console.error('Category daily trends error:', catErr);
+            // Swallow category trend errors; keep main dashboard responsive
           }
         }
       } else {
         setHasData(false);
       }
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
       setHasData(false);
     } finally {
       setLoading(false);

@@ -271,7 +271,6 @@ const Forecasts = () => {
             setForecastData(response.data);
             setError(null);
         } catch (err) {
-            console.error("Forecast error:", err);
             setError("Unable to load forecast data. Please try again.");
             setForecastData(null);
         } finally {

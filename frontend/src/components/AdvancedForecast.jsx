@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-    LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     ComposedChart, Area
 } from 'recharts';
 import { Filter, Calendar, Layers, Activity, Download } from 'lucide-react';
@@ -40,7 +40,7 @@ const AdvancedForecast = () => {
             setData(response.data);
 
         } catch (error) {
-            console.error("Failed to fetch advanced forecasts", error);
+            // Keep UI silent on failure; consider surfacing toast if needed
         } finally {
             setLoading(false);
         }

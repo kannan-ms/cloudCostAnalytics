@@ -8,6 +8,9 @@ from typing import Dict, List, Optional, Tuple
 from bson import ObjectId
 from database import get_collection, Collections
 from config import Config
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # Valid cloud providers
@@ -26,7 +29,7 @@ def delete_all_costs_for_user(user_id: str) -> bool:
         costs_collection.delete_many({"user_id": ObjectId(user_id)})
         return True
     except Exception as e:
-        print(f"Error clearing user costs: {e}")
+        logger.error("Error clearing user costs: %s", e)
         return False
 
 

@@ -35,7 +35,6 @@ const Reports = () => {
                 setReports(reportsData);
             }
         } catch (err) {
-            console.error('Error fetching reports:', err);
             setError('Failed to load reports');
         } finally {
             setLoading(false);
@@ -83,7 +82,6 @@ const Reports = () => {
             window.URL.revokeObjectURL(downloadUrl);
             
         } catch (err) {
-            console.error('Error downloading report:', err);
             
             // Get error message from response
             let errorMessage = 'Failed to download report.';

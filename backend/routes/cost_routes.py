@@ -6,12 +6,14 @@ Production-quality Flask routes with authentication and error handling
 from flask import Blueprint, request, jsonify
 from functools import wraps
 import jwt
+import logging
 from datetime import datetime
 from config import Config
 from services import cost_service, user_service, anomaly_detector
 from services.file_parser import parse_file
 
 cost_routes = Blueprint('costs', __name__, url_prefix='/api/costs')
+logger = logging.getLogger(__name__)
 
 
 def token_required(f):
@@ -682,7 +684,7 @@ def get_auto_trends(current_user_id):
         }), 200
         
     except Exception as e:
-        print(f"Error getting auto trends: {e}")
+        logger.exception("Error getting auto trends")
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 
@@ -1179,7 +1181,7 @@ def get_dashboard_insights(current_user_id):
         }), 200
 
     except Exception as e:
-        print(f"Dashboard insights error: {e}")
+        logger.exception("Dashboard insights error")
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 

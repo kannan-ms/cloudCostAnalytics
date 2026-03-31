@@ -14,6 +14,8 @@ import numpy as np
 import logging
 import math
 
+logger = logging.getLogger(__name__)
+
 # Configure logging to suppress Prophet noise
 logging.getLogger('cmdstanpy').setLevel(logging.WARNING)
 logging.getLogger('prophet').setLevel(logging.WARNING)
@@ -305,7 +307,7 @@ def predict_future_costs(
         }
 
     except Exception as e:
-        print(f"Forecasting error: {e}")
+        logger.exception("Forecasting error")
         return {"error": str(e)}
 
 
@@ -321,6 +323,9 @@ def get_detailed_forecast(
         
     try:
         global_forecast = predict_future_costs(user_id, periods_ahead, granularity, filters)
+
+        if not global_forecast.get('success'):
+            return {"error": global_forecast.get('error', 'Failed to generate forecast')}
         
         costs_collection = get_collection(Collections.CLOUD_COSTS)
         match_query = {"user_id": ObjectId(user_id)}

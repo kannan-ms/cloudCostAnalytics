@@ -25,7 +25,7 @@ const Sidebar = ({ globalFilters = {}, onGlobalFilterChange }) => {
         try {
             setUser(JSON.parse(storedUser));
         } catch (e) {
-            console.error("Failed to parse user data", e);
+        // Ignore malformed user payload in storage
         }
     }
   }, []);

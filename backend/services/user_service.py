@@ -5,11 +5,15 @@ User Service - Handle user management and authentication with MongoDB
 import re
 import bcrypt
 import jwt
+import logging
 from datetime import datetime, timedelta
 from bson import ObjectId
 from database import get_collection, Collections
 from schemas import User
 from config import Config
+from services.email_service import send_verification_email, is_email_configured
+
+logger = logging.getLogger(__name__)
 
 
 def validate_email(email):
@@ -104,8 +108,7 @@ def get_user_by_id(user_id):
         users_collection = get_collection(Collections.USERS)
         return users_collection.find_one({"_id": ObjectId(user_id)})
     except Exception as e:
-        # Log the error for debugging
-        print(f"Error in get_user_by_id: {str(e)}")
+        logger.exception("Error in get_user_by_id")
         return None
 
 
@@ -114,6 +117,8 @@ def create_user(name, email, password):
     Create a new user with validation.
     Returns (success, user_data_or_error_message)
     """
+    if not is_email_configured():
+        return False, "Email is not configured. Please contact support."
     # Validate name
     is_valid, error = validate_name(name)
     if not is_valid:
@@ -139,9 +144,22 @@ def create_user(name, email, password):
     # Create user document
     user_doc = User.create_document(name.strip(), email, password_hash)
     
+    # Generate OTP
+    import random
+    otp_code = f"{random.randint(100000, 999999)}"
+    user_doc['otp_code'] = otp_code
+    user_doc['otp_expires_at'] = datetime.utcnow() + timedelta(minutes=15)
+
     # Insert into database
     users_collection = get_collection(Collections.USERS)
     result = users_collection.insert_one(user_doc)
+    
+    try:
+        send_verification_email(email, name.strip(), otp_code)
+    except Exception as exc:
+        # Roll back user creation if we cannot send the verification email
+        users_collection.delete_one({"_id": result.inserted_id})
+        return False, f"Failed to send verification email: {str(exc)}"
     
     # Return user without password
     return True, {
@@ -174,8 +192,12 @@ def authenticate_user(email, password):
             return False, "Invalid email or password"
     except Exception as e:
         # Handle malformed password hash
-        print(f"Password check error: {str(e)}")
+        logger.exception("Password check error")
         return False, "Invalid account data. Please contact support."
+    
+    # Check if user is verified (legacy users without field are considered verified)
+    if not user.get('is_verified', True):
+        return False, "verify_required"
     
     # Update last login
     users_collection = get_collection(Collections.USERS)
@@ -234,3 +256,82 @@ def get_all_users():
     users_collection = get_collection(Collections.USERS)
     users = list(users_collection.find())
     return [User.sanitize(user) for user in users]
+
+
+def verify_user_otp(email, otp):
+    """
+    Verify the OTP for a user during registration.
+    """
+    if not email or not otp:
+        return False, "Email and OTP are required", None
+        
+    user = get_user_by_email(email)
+    if not user:
+        return False, "User not found", None
+        
+    if user.get('is_verified'):
+        return False, "User is already verified", None
+        
+    if user.get('otp_code') != otp:
+        return False, "Invalid verification code", None
+        
+    if not user.get('otp_expires_at') or datetime.utcnow() > user['otp_expires_at']:
+        return False, "Verification code has expired. Please request a new one.", None
+        
+    # Mark as verified
+    users_collection = get_collection(Collections.USERS)
+    users_collection.update_one(
+        {"_id": user['_id']},
+        {"$set": {
+            "is_verified": True, 
+            "otp_code": None, 
+            "otp_expires_at": None,
+            "updated_at": datetime.utcnow()
+        }}
+    )
+    
+    # Return user data for token generation
+    return True, "Verification successful", {
+        'id': str(user['_id']),
+        'name': user['name'],
+        'email': user['email'],
+        'created_at': user.get('created_at', datetime.utcnow()).isoformat() if isinstance(user.get('created_at'), datetime) else str(user.get('created_at', ''))
+    }
+
+
+def resend_user_otp(email):
+    """
+    Resend a new OTP to the user.
+    """
+    if not email:
+        return False, "Email is required"
+
+    if not is_email_configured():
+        return False, "Email is not configured. Please contact support."
+        
+    user = get_user_by_email(email)
+    if not user:
+        return False, "User not found"
+        
+    if user.get('is_verified'):
+        return False, "User is already verified"
+        
+    import random
+    otp_code = f"{random.randint(100000, 999999)}"
+    
+    users_collection = get_collection(Collections.USERS)
+    users_collection.update_one(
+        {"_id": user['_id']},
+        {"$set": {
+            "otp_code": otp_code,
+            "otp_expires_at": datetime.utcnow() + timedelta(minutes=15),
+            "updated_at": datetime.utcnow()
+        }}
+    )
+    
+    try:
+        send_verification_email(user['email'], user['name'], otp_code)
+    except Exception as exc:
+        return False, f"Failed to send verification email: {str(exc)}"
+    
+    return True, "Code sent successfully"

@@ -31,6 +31,9 @@ class User:
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow(),
             "is_active": True,
+            "is_verified": False,
+            "otp_code": None,
+            "otp_expires_at": None,
             "role": "user",
             "profile": {
                 "avatar": None,
@@ -39,6 +42,8 @@ class User:
             },
             "settings": {
                 "email_notifications": True,
+                "email_alerts_enabled": True,
+                "email_alert_cooldown_minutes": 10,
                 "alert_threshold": 100.0,
                 "currency": "USD"
             }
@@ -50,6 +55,8 @@ class User:
         if user_doc:
             user_doc['_id'] = str(user_doc['_id'])
             user_doc.pop('password_hash', None)
+            user_doc.pop('otp_code', None)
+            user_doc.pop('otp_expires_at', None)
             return user_doc
         return None
 

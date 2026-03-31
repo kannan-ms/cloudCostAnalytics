@@ -24,7 +24,7 @@ const FilterBar = ({ filters = {}, onFilterChange }) => {
                     });
                 }
             } catch (err) {
-                console.error("Failed to fetch filter options", err);
+                // Silent failure; UI can show empty filters
             } finally {
                 setLoading(false);
             }

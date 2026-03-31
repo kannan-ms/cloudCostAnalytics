@@ -3,6 +3,13 @@ Cloud Cost Behaviour Analytics and Anomaly Detection API
 Main Flask application entry point with MongoDB Atlas integration.
 """
 
+import os
+import logging
+from dotenv import load_dotenv
+
+# Load environment variables before importing Config
+load_dotenv()
+
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from config import Config
@@ -14,6 +21,8 @@ from routes.forecast_routes import forecast_routes
 from routes.report_routes import report_routes
 from routes.recommendations_routes import recommendations_routes
 
+logger = logging.getLogger(__name__)
+
 
 def create_app(config=Config):
     """
@@ -22,15 +31,13 @@ def create_app(config=Config):
     """
     app = Flask(__name__)
     
-    # Load configuration
     app.config.from_object(config)
     
     # Initialize MongoDB connection
     if Database.initialize():
         create_indexes()
     else:
-        print(" Failed to connect to MongoDB Atlas")
-        print("Please check your MONGODB_URI in .env file")
+        logger.error("Failed to connect to MongoDB Atlas. Check MONGODB_URI in .env")
     
     # Enable CORS (include both /api/* and upload endpoint)
     CORS(app, resources={
@@ -148,8 +155,8 @@ if __name__ == '__main__':
     
     app = create_app()
     
-    print(" Server starting on http://localhost:5000")
-    
+    logger.info("Server starting on http://localhost:5000")
+
     try:
         app.run(
             host='127.0.0.1',
@@ -159,8 +166,8 @@ if __name__ == '__main__':
             threaded=True
         )
     except KeyboardInterrupt:
-        print("\n\n Server stopped")
+        logger.info("Server stopped")
     except Exception as e:
-        print(f"\n Server error: {e}")
+        logger.exception("Server error")
     finally:
         Database.close()

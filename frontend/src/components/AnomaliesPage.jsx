@@ -64,7 +64,6 @@ const AnomaliesPage = ({ globalFilters = {} }) => {
       const billingAnomalies = res.data?.anomalies || [];
       setAnomalies(billingAnomalies.length ? billingAnomalies : getDefaultAnomalies());
     } catch (err) {
-      console.error('Error fetching anomalies:', err);
       setAnomalies(getDefaultAnomalies());
     } finally {
       setLoading(false);

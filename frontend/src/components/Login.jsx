@@ -35,7 +35,11 @@ function Login() {
         navigate('/dashboard');
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Login failed. Please check your credentials.');
+      if (err.response?.data?.code === 'VERIFY_REQUIRED') {
+        setError(err.response?.data?.error);
+      } else {
+        setError(err.response?.data?.error || 'Login failed. Please check your credentials.');
+      }
     } finally {
       setLoading(false);
     }

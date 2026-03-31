@@ -17,7 +17,6 @@ const Budgets = () => {
             setBudgets(response.data);
             setError(null);
         } catch (err) {
-            console.error("Error fetching budgets:", err);
             setError("Failed to load budgets.");
         } finally {
             setLoading(false);
@@ -33,7 +32,6 @@ const Budgets = () => {
             await api.createBudget(budgetData);
             await fetchBudgets(); // Refresh list
         } catch (err) {
-            console.error("Error creating budget:", err);
             throw new Error(err.response?.data?.error || "Failed to create budget");
         }
     };
@@ -44,7 +42,6 @@ const Budgets = () => {
             await api.deleteBudget(id);
             setBudgets(budgets.filter(b => b.budget.id !== id));
         } catch (err) {
-            console.error("Error deleting budget:", err);
             alert("Failed to delete budget");
         }
     };

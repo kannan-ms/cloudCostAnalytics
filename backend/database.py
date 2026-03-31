@@ -67,29 +67,24 @@ class Database:
             # Verify database access
             Database.db.command('ping')
             
-            print(" MongoDB Atlas connected")
+            logger.info("MongoDB Atlas connected")
             return True
             
         except ValueError as e:
             logger.error(f"Configuration error: {e}")
-            print(f"Error: {e}")
             logger.error("Please check your MONGODB_URI in the .env file")
             return False
         except ConnectionFailure as e:
             logger.error(f"Failed to connect to MongoDB: {e}")
-            print(f"ConnectionFailure: {e}")
             return False
         except ServerSelectionTimeoutError as e:
             logger.error(f"MongoDB server selection timeout: {e}")
-            print(f"ServerSelectionTimeoutError: {e}")
             return False
         except ConfigurationError as e:
             logger.error(f"MongoDB configuration error: {e}")
-            print(f"ConfigurationError: {e}")
             return False
         except Exception as e:
             logger.error(f"Unexpected error connecting to MongoDB: {e}")
-            print(f"Unexpected error: {e}")
             return False
     
     @staticmethod
@@ -193,12 +188,6 @@ def create_indexes():
 
 
 if __name__ == "__main__":
-    # Test database connection
-    print("Testing MongoDB connection...")
+    # Test database connection without console output
     if Database.initialize():
-        print("✓ Connection successful!")
-        print(f"Database: {Database.db.name}")
-        print(f"Collections: {Database.db.list_collection_names()}")
         Database.close()
-    else:
-        print("✗ Connection failed!")

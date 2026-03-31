@@ -31,7 +31,6 @@ const ServiceAnalysis = ({ globalFilters = {} }) => {
         setHasData(false);
       }
     } catch (err) {
-      console.error('Error fetching service data:', err);
       setHasData(false);
     } finally {
       setLoading(false);

@@ -9,7 +9,9 @@ from services.user_service import (
     authenticate_user,
     generate_token,
     verify_token,
-    get_all_users
+    get_all_users,
+    verify_user_otp,
+    resend_user_otp
 )
 
 auth_routes = Blueprint('auth', __name__, url_prefix='/api/auth')
@@ -50,13 +52,11 @@ def register():
         if not success:
             return jsonify({'error': result}), 400
         
-        # Generate token
-        token = generate_token(result)
-        
+        # Demand OTP verification
         return jsonify({
-            'message': 'Registration successful',
-            'user': result,
-            'token': token
+            'message': 'Registration successful. Please verify your email.',
+            'email': result['email'],
+            'user_id': result['id']
         }), 201
     
     except Exception as e:
@@ -90,6 +90,11 @@ def login():
         success, result = authenticate_user(email, password)
         
         if not success:
+            if result == "verify_required":
+                return jsonify({
+                    'error': 'Account not verified. Please verify your email.',
+                    'code': 'VERIFY_REQUIRED'
+                }), 403
             return jsonify({'error': result}), 401
         
         # Generate token
@@ -106,6 +111,47 @@ def login():
             'error': 'Login failed',
             'message': str(e)
         }), 500
+
+
+@auth_routes.route('/verify-otp', methods=['POST'])
+def verify_otp():
+    """Verify email via OTP."""
+    try:
+        data = request.get_json()
+        email = data.get('email', '').strip()
+        otp = data.get('otp', '').strip()
+        
+        success, message, user = verify_user_otp(email, otp)
+        
+        if not success:
+            return jsonify({'error': message}), 400
+            
+        token = generate_token(user)
+        
+        return jsonify({
+            'message': message,
+            'user': user,
+            'token': token
+        }), 200
+    except Exception as e:
+        return jsonify({'error': 'Verification failed', 'message': str(e)}), 500
+
+
+@auth_routes.route('/resend-otp', methods=['POST'])
+def resend_otp():
+    """Resend verification OTP."""
+    try:
+        data = request.get_json()
+        email = data.get('email', '').strip()
+        
+        success, message = resend_user_otp(email)
+        
+        if not success:
+            return jsonify({'error': message}), 400
+            
+        return jsonify({'message': message}), 200
+    except Exception as e:
+        return jsonify({'error': 'Failed to resend OTP', 'message': str(e)}), 500
 
 
 @auth_routes.route('/verify', methods=['GET'])

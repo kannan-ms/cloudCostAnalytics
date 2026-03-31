@@ -1,11 +1,13 @@
 from flask import Blueprint, request, jsonify
 from functools import wraps
 import jwt
+import logging
 from config import Config
 from services.budget_service import budget_service
 from services import user_service
 
 budget_routes = Blueprint('budgets', __name__, url_prefix='/api/budgets')
+logger = logging.getLogger(__name__)
 
 def token_required(f):
     @wraps(f)
@@ -55,7 +57,7 @@ def list_budgets(current_user_id):
                 status = budget_service.track_budget(current_user_id, b['_id'])
                 enhanced_budgets.append(status)
             except Exception as e:
-                print(f"Error tracking budget {b.get('_id')}: {e}")
+                logger.warning("Error tracking budget %s: %s", b.get('_id'), e)
                 enhanced_budgets.append({"budget": b, "error": "Failed to track"})
                 
         return jsonify(enhanced_budgets), 200
