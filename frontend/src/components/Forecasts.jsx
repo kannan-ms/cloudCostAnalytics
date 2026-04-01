@@ -12,9 +12,6 @@ import {
 } from 'recharts';
 import { XAxisProps, YAxisProps, GridProps } from '../utils/chartConfig.jsx';
 
-/* ------------------------------------------------------------------ */
-/*  Predictive Insight Cards                                          */
-/* ------------------------------------------------------------------ */
 const CARD_CONFIG = [
     {
         key: 'projected',
