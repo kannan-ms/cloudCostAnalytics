@@ -4,6 +4,7 @@ Handles user registration, login, and token verification
 """
 
 from flask import Blueprint, jsonify, request
+import logging
 from services.user_service import (
     create_user,
     authenticate_user,
@@ -15,6 +16,7 @@ from services.user_service import (
 )
 
 auth_routes = Blueprint('auth', __name__, url_prefix='/api/auth')
+logger = logging.getLogger(__name__)
 
 
 @auth_routes.route('/register', methods=['POST'])
@@ -29,7 +31,7 @@ def register():
         if not data:
             return jsonify({'error': 'No data provided'}), 400
         
-        # Extract fields
+        # Extract and validate fields
         name = data.get('name', '').strip()
         email = data.get('email', '').strip()
         password = data.get('password', '')
@@ -42,17 +44,18 @@ def register():
                 'fields': ['name', 'email', 'password', 'confirmPassword']
             }), 400
         
-        # Check if passwords match
+        # Validate passwords match
         if password != confirm_password:
             return jsonify({'error': 'Passwords do not match'}), 400
         
-        # Create user
+        # Call create_user service
         success, result = create_user(name, email, password)
         
+        # Check for errors from create_user
         if not success:
             return jsonify({'error': result}), 400
         
-        # Demand OTP verification
+        # Return success response
         return jsonify({
             'message': 'Registration successful. Please verify your email.',
             'email': result['email'],
@@ -60,9 +63,10 @@ def register():
         }), 201
     
     except Exception as e:
+        logger.exception("Registration failed")
         return jsonify({
             'error': 'Registration failed',
-            'message': str(e)
+            'message': 'Internal server error'
         }), 500
 
 

@@ -117,8 +117,8 @@ def create_user(name, email, password):
     Create a new user with validation.
     Returns (success, user_data_or_error_message)
     """
-    if not is_email_configured():
-        return False, "Email is not configured. Please contact support."
+    logger.info(f"[CREATE_USER] Starting for {email}")
+    
     # Validate name
     is_valid, error = validate_name(name)
     if not is_valid:
@@ -154,12 +154,16 @@ def create_user(name, email, password):
     users_collection = get_collection(Collections.USERS)
     result = users_collection.insert_one(user_doc)
     
-    try:
-        send_verification_email(email, name.strip(), otp_code)
-    except Exception as exc:
-        # Roll back user creation if we cannot send the verification email
-        users_collection.delete_one({"_id": result.inserted_id})
-        return False, f"Failed to send verification email: {str(exc)}"
+    # Try to send verification email if configured
+    if is_email_configured():
+        try:
+            send_verification_email(email, name.strip(), otp_code)
+        except Exception as exc:
+            # In development, log the error but don't fail registration
+            logger.warning(f"Failed to send verification email: {str(exc)}")
+            # Don't roll back - allow registration without email
+    else:
+        logger.info("Email not configured - skipping verification email for development")
     
     # Return user without password
     return True, {
@@ -307,7 +311,8 @@ def resend_user_otp(email):
         return False, "Email is required"
 
     if not is_email_configured():
-        return False, "Email is not configured. Please contact support."
+        logger.warning("Cannot resend OTP: Email not configured")
+        return False, "Email service not available. Please try again later or contact support."
         
     user = get_user_by_email(email)
     if not user:

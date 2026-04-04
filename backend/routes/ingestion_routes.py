@@ -26,31 +26,43 @@ ingestion_routes = Blueprint("ingestion", __name__, url_prefix="/api/ingestion")
 def _persist_normalized_costs(user_id: str, result_df):
     """Persist normalized ingestion rows into cloud_costs using existing service validation."""
     records = []
-    for _, row in result_df.iterrows():
+    parse_errors = []
+    for row_index, row in result_df.iterrows():
         row_date = row.get("date")
         
-        # Handle missing or invalid dates - use today
+        # Handle missing or invalid dates by skipping invalid rows.
         if hasattr(row_date, "to_pydatetime"):
             row_date = row_date.to_pydatetime()
         
         try:
             if row_date is None or pd.isna(row_date):
-                # If no date, use today
-                row_date = datetime.utcnow()
+                parse_errors.append({"row": int(row_index), "field": "date", "error": "Missing date"})
+                continue
             elif isinstance(row_date, str):
                 try:
                     row_date = datetime.fromisoformat(row_date.replace('Z', '+00:00'))
-                except:
-                    row_date = datetime.utcnow()
-        except:
-            row_date = datetime.utcnow()
+                except Exception:
+                    parse_errors.append({"row": int(row_index), "field": "date", "error": "Invalid date format"})
+                    continue
+            elif not isinstance(row_date, datetime):
+                parse_errors.append({"row": int(row_index), "field": "date", "error": "Unsupported date type"})
+                continue
+        except Exception:
+            parse_errors.append({"row": int(row_index), "field": "date", "error": "Date parsing failed"})
+            continue
+
+        try:
+            normalized_cost = float(row.get("cost", 0) or 0)
+        except (TypeError, ValueError):
+            parse_errors.append({"row": int(row_index), "field": "cost", "error": "Invalid numeric cost"})
+            continue
 
         # The normalized ingestion output uses category-level aggregation.
         # Persist category as service_name so downstream analytics remain consistent.
         records.append({
             "provider": str(row.get("provider", "Other")).strip().title(),
             "service_name": str(row.get("category", "Other")).strip() or "Other",
-            "cost": float(row.get("cost", 0) or 0),
+            "cost": normalized_cost,
             "usage_start_date": row_date,
             "usage_end_date": row_date,
             "region": row.get("region", "global"),
@@ -76,8 +88,8 @@ def _persist_normalized_costs(user_id: str, result_df):
 
     total_records = len(records)
     total_success = 0
-    total_errors = 0
-    merged_errors = []
+    total_errors = len(parse_errors)
+    merged_errors = list(parse_errors)
 
     for start in range(0, total_records, 1000):
         chunk = records[start:start + 1000]

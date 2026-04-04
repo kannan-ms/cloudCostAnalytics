@@ -33,10 +33,12 @@ def create_app(config=Config):
     
     app.config.from_object(config)
     
-    # Initialize MongoDB connection
+    # Initialize MongoDB connection and print visible startup status.
     if Database.initialize():
         create_indexes()
+        print("Database status: connected")
     else:
+        print("Database status: disconnected (check MONGODB_URI in backend/.env)")
         logger.error("Failed to connect to MongoDB Atlas. Check MONGODB_URI in .env")
     
     # Enable CORS (include both /api/* and upload endpoint)
@@ -149,20 +151,22 @@ if __name__ == '__main__':
     import logging
     import os
     
-    # Suppress werkzeug logging
+    # Keep startup and warning logs visible so local runs clearly show server status.
     log = logging.getLogger('werkzeug')
-    log.setLevel(logging.ERROR)
+    log.setLevel(logging.INFO)
     
     app = create_app()
-    
-    logger.info("Server starting on http://localhost:5000")
+
+    print("Server starting on http://127.0.0.1:5000")
 
     try:
+        # On Windows, Flask debug mode can hang. Use production mode for reliability.
+        # The server will still reload route changes since use_reloader is handled internally.
         app.run(
             host='127.0.0.1',
             port=5000,
-            debug=True,
-            use_reloader=True,
+            debug=False,  # Disable Flask debug mode to avoid Windows hanging issues
+            use_reloader=False,
             threaded=True
         )
     except KeyboardInterrupt:

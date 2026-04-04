@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Loader } from 'lucide-react';
+import { Loader, ChevronUp, ChevronDown } from 'lucide-react';
 import api from '../services/api';
 import AdvancedForecast from './AdvancedForecast';
 import { ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -137,6 +137,23 @@ const Forecasts = () => {
             </div>
 
             <ServiceBreakdownTable services={top_services_forecast} />
+
+            <div className="bg-white rounded-xl border border-slate-200/60 overflow-hidden">
+                <button
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    className="w-full flex items-center justify-between p-4 text-[13px] font-medium text-slate-600 hover:text-slate-800 transition-colors"
+                >
+                    <span className="flex items-center gap-2">
+                        Advanced Analysis & Service Comparison
+                    </span>
+                    {showAdvanced ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </button>
+                {showAdvanced && (
+                    <div className="px-4 pb-5 border-t border-slate-100 pt-4">
+                        <AdvancedForecast />
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

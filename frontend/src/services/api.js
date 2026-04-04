@@ -45,6 +45,8 @@ api.getDashboardInsights = (filters = {}) => {
   if (filters.provider) params.append('provider', filters.provider);
   if (filters.region) params.append('region', filters.region);
   if (filters.account) params.append('account', filters.account);
+  if (filters.month && filters.month !== 'all') params.append('month', filters.month);
+  if (filters.latest_month) params.append('latest_month', 'true');
   
   const queryString = params.toString();
   return api.get(`/costs/dashboard-insights${queryString ? '?' + queryString : ''}`);

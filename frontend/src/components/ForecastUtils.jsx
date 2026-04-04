@@ -32,11 +32,23 @@ export const CARD_CONFIG = [
 ];
 
 export function computeCardValues(summary, days) {
-    const { total_predicted_cost, growth_percentage, status_badge, confidence_score, predicted_daily_avg } = summary;
-    const projectedMonthly = predicted_daily_avg ? predicted_daily_avg * 30 : (total_predicted_cost / days) * 30;
+    const {
+        total_predicted_cost,
+        growth_percentage,
+        status_badge,
+        confidence_score,
+        predicted_period_avg,
+        predicted_daily_avg,
+        period_unit,
+    } = summary;
+
+    const avgPerPeriod = predicted_period_avg ?? predicted_daily_avg ?? (total_predicted_cost / Math.max(days, 1));
+    const normalizedUnit = String(period_unit || 'Day').toLowerCase();
+    const monthlyFactor = normalizedUnit === 'week' ? 4.345 : normalizedUnit === 'month' ? 1 : 30;
+    const projectedMonthly = avgPerPeriod * monthlyFactor;
 
     let exhaustionLabel = '—';
-    if (growth_percentage > 0 && predicted_daily_avg > 0) {
+    if (growth_percentage > 0 && avgPerPeriod > 0) {
         const daysUntilExhaust = Math.round(30 / (1 + growth_percentage / 100));
         exhaustionLabel = `~${daysUntilExhaust} days`;
     } else {

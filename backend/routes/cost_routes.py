@@ -10,7 +10,7 @@ import logging
 from datetime import datetime
 from config import Config
 from services import cost_service, user_service, anomaly_detector
-from services.file_parser import parse_file
+from services.file_parser import parse_file, get_last_parse_summary
 
 cost_routes = Blueprint('costs', __name__, url_prefix='/api/costs')
 logger = logging.getLogger(__name__)
@@ -919,6 +919,7 @@ def upload_cost_file(current_user_id):
             return jsonify({'error': result}), 400
         
         records = result
+        parse_summary = get_last_parse_summary()
 
         # Clear existing data for a fresh start (per option 2 requirement)
         cost_service.delete_all_costs_for_user(current_user_id)
@@ -944,6 +945,13 @@ def upload_cost_file(current_user_id):
             status_code = 400
             message = 'File processing failed. No records were imported.'
         
+        combined_errors = list(ingest_result['errors'][:5] if ingest_result['errors'] else [])
+        if parse_summary.get('dropped_rows', 0) > 0:
+            combined_errors.insert(0, {
+                'warning': f"{parse_summary['dropped_rows']} rows were skipped during file parsing",
+                'sample_parse_errors': parse_summary.get('sample_errors', [])
+            })
+
         return jsonify({
             'success': ingest_result['success_count'] > 0,
             'message': message,
@@ -951,7 +959,7 @@ def upload_cost_file(current_user_id):
             'total_records': ingest_result['total_records'],
             'success_count': ingest_result['success_count'],
             'error_count': ingest_result['error_count'],
-            'sample_errors': ingest_result['errors'][:5] if ingest_result['errors'] else []
+            'sample_errors': combined_errors
         }), status_code
         
     except Exception as e:
@@ -1008,6 +1016,11 @@ def get_dashboard_insights(current_user_id):
         provider_filter = request.args.get('provider')
         region_filter = request.args.get('region')
         account_filter = request.args.get('account')
+        month_filter = request.args.get('month')
+        latest_month = request.args.get('latest_month', 'false').lower() == 'true'
+
+        if month_filter == 'all':
+            month_filter = None
 
         costs_col = get_collection(Collections.CLOUD_COSTS)
         user_oid = ObjectId(current_user_id)
@@ -1026,6 +1039,31 @@ def get_dashboard_insights(current_user_id):
             query["region"] = region_filter
         if account_filter and account_filter != 'No Filters Applied':
             query["cloud_account_id"] = account_filter
+
+        # Apply month filter when provided (YYYY-MM), or auto-detect latest month.
+        if not month_filter and latest_month:
+            latest_doc = costs_col.find_one(
+                query,
+                {"usage_start_date": 1, "_id": 0},
+                sort=[("usage_start_date", -1)]
+            )
+            if latest_doc and latest_doc.get("usage_start_date"):
+                latest_date = latest_doc["usage_start_date"]
+                month_filter = f"{latest_date.year}-{str(latest_date.month).zfill(2)}"
+
+        if month_filter:
+            try:
+                month_start = datetime.strptime(month_filter, '%Y-%m')
+                if month_start.month == 12:
+                    month_end = month_start.replace(year=month_start.year + 1, month=1)
+                else:
+                    month_end = month_start.replace(month=month_start.month + 1)
+                query["usage_start_date"] = {
+                    "$gte": month_start,
+                    "$lt": month_end
+                }
+            except (ValueError, TypeError):
+                pass
 
         all_docs = list(costs_col.find(
             query,

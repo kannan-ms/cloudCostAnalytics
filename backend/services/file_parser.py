@@ -25,6 +25,12 @@ except ImportError:
 # Supported file extensions
 ALLOWED_EXTENSIONS = {'.csv', '.xlsx', '.xls'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+_LAST_PARSE_SUMMARY: Dict[str, Any] = {"dropped_rows": 0, "sample_errors": []}
+
+
+def get_last_parse_summary() -> Dict[str, Any]:
+    """Return parse diagnostics from the most recent parse operation."""
+    return dict(_LAST_PARSE_SUMMARY)
 
 
 def is_allowed_file(filename: str) -> bool:
@@ -167,13 +173,13 @@ def _infer_provider(consumed_service: Optional[str] = None, service_name: Option
     return 'Azure'  # default fallback
 
 
-def extract_cost_records(rows: List[Dict[str, Any]], column_mapping: Dict[str, str]) -> List[Dict]:
+def extract_cost_records(rows: List[Dict[str, Any]], column_mapping: Dict[str, str], parse_errors: Optional[List[Dict[str, Any]]] = None) -> List[Dict]:
     """
     Extract cost records from list of dictionaries (rows) using column mapping.
     """
     records = []
     
-    for row in rows:
+    for row_index, row in enumerate(rows, start=1):
         try:
             record = {}
             
@@ -208,7 +214,9 @@ def extract_cost_records(rows: List[Dict[str, Any]], column_mapping: Dict[str, s
                     if isinstance(cost, str):
                         cost = cost.replace('$', '').replace('\u20ac', '').replace('\u00a3', '').replace(',', '').strip()
                     record['cost'] = float(cost)
-                except:
+                except Exception:
+                    if parse_errors is not None:
+                        parse_errors.append({'row': row_index, 'field': 'cost', 'error': 'Invalid numeric value'})
                     continue
             
             # Dates
@@ -266,6 +274,8 @@ def extract_cost_records(rows: List[Dict[str, Any]], column_mapping: Dict[str, s
         
         except Exception:
             # Skip problematic rows
+            if parse_errors is not None:
+                parse_errors.append({'row': row_index, 'field': 'row', 'error': 'Row parsing failed'})
             continue
     
     return records
@@ -276,6 +286,9 @@ def parse_csv_file(file_content: bytes) -> Tuple[bool, Any]:
     Parse CSV file and extract cost records.
     """
     try:
+        global _LAST_PARSE_SUMMARY
+        _LAST_PARSE_SUMMARY = {"dropped_rows": 0, "sample_errors": []}
+
         # Try different encodings
         encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']
         decoded_content = None
@@ -314,10 +327,16 @@ def parse_csv_file(file_content: bytes) -> Tuple[bool, Any]:
             return False, f"Missing required columns: {', '.join(missing_fields)}. Detected columns: {available}. Please ensure your CSV has at minimum: service_name (or MeterCategory), cost (or CostInBillingCurrency), and a date column."
         
         # Extract records
-        records = extract_cost_records(rows, column_mapping)
+        parse_errors = []
+        records = extract_cost_records(rows, column_mapping, parse_errors=parse_errors)
         
         if not records:
             return False, "No valid records could be extracted from the CSV file. Please check that your data rows contain valid service names, costs, and dates."
+
+        _LAST_PARSE_SUMMARY = {
+            "dropped_rows": len(parse_errors),
+            "sample_errors": parse_errors[:5]
+        }
         
         return True, records
         
@@ -333,6 +352,9 @@ def parse_excel_file(file_content: bytes) -> Tuple[bool, Any]:
         return False, "openpyxl library is missing (required for .xlsx)"
 
     try:
+        global _LAST_PARSE_SUMMARY
+        _LAST_PARSE_SUMMARY = {"dropped_rows": 0, "sample_errors": []}
+
         # Load workbook
         wb = openpyxl.load_workbook(filename=io.BytesIO(file_content), data_only=True)
         sheet = wb.active
@@ -374,10 +396,16 @@ def parse_excel_file(file_content: bytes) -> Tuple[bool, Any]:
             return False, f"Missing required columns: {', '.join(missing_fields)}. Detected columns: {available}. Please ensure your Excel has at minimum: service_name, cost, and a date column."
         
         # Extract records
-        records = extract_cost_records(rows, column_mapping)
+        parse_errors = []
+        records = extract_cost_records(rows, column_mapping, parse_errors=parse_errors)
         
         if not records:
             return False, "No valid records could be extracted from the Excel file. Please check that your data rows contain valid service names, costs, and dates."
+
+        _LAST_PARSE_SUMMARY = {
+            "dropped_rows": len(parse_errors),
+            "sample_errors": parse_errors[:5]
+        }
         
         return True, records
         

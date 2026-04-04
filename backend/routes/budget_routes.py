@@ -3,7 +3,7 @@ from functools import wraps
 import jwt
 import logging
 from config import Config
-from services.budget_service import budget_service
+from services.budget_service import BudgetService
 from services import user_service
 
 budget_routes = Blueprint('budgets', __name__, url_prefix='/api/budgets')
@@ -14,7 +14,11 @@ def token_required(f):
     def decorated(*args, **kwargs):
         token = None
         if 'Authorization' in request.headers:
-            token = request.headers['Authorization'].split(" ")[1]
+            auth_header = request.headers['Authorization']
+            parts = auth_header.split()
+            if len(parts) != 2 or parts[0].lower() != 'bearer':
+                return jsonify({'error': 'Invalid token format. Use: Bearer <token>'}), 401
+            token = parts[1]
         if not token:
             return jsonify({'error': 'Authentication token is missing'}), 401
         try:
@@ -37,7 +41,7 @@ def create_budget(current_user_id):
         if not data.get('name') or not data.get('amount'):
             return jsonify({'error': 'Name and amount are required'}), 400
             
-        budget = budget_service.create_budget(current_user_id, data)
+        budget = BudgetService.create_budget(current_user_id, data)
         return jsonify(budget), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -47,14 +51,14 @@ def create_budget(current_user_id):
 def list_budgets(current_user_id):
     """List all budgets with their current status."""
     try:
-        budgets = budget_service.get_budgets(current_user_id)
+        budgets = BudgetService.get_budgets(current_user_id)
         
         # Enhance with current tracking data
         enhanced_budgets = []
         for b in budgets:
             try:
                 # Get tracking details for each (can be optimized later)
-                status = budget_service.track_budget(current_user_id, b['_id'])
+                status = BudgetService.track_budget(current_user_id, b['_id'])
                 enhanced_budgets.append(status)
             except Exception as e:
                 logger.warning("Error tracking budget %s: %s", b.get('_id'), e)
@@ -69,7 +73,7 @@ def list_budgets(current_user_id):
 def get_budget_details(current_user_id, budget_id):
     """Get detailed status of a specific budget."""
     try:
-        status = budget_service.track_budget(current_user_id, budget_id)
+        status = BudgetService.track_budget(current_user_id, budget_id)
         if status.get('error'):
             return jsonify(status), 404
         return jsonify(status), 200
@@ -81,7 +85,7 @@ def get_budget_details(current_user_id, budget_id):
 def delete_budget(current_user_id, budget_id):
     """Delete a budget."""
     try:
-        success = budget_service.delete_budget(current_user_id, budget_id)
+        success = BudgetService.delete_budget(current_user_id, budget_id)
         if success:
             return jsonify({'message': 'Budget deleted successfully'}), 200
         return jsonify({'error': 'Budget not found'}), 404

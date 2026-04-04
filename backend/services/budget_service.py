@@ -20,12 +20,20 @@ class BudgetService:
     @staticmethod
     def create_budget(user_id: str, data: Dict) -> Dict:
         budgets = get_collection(Collections.BUDGETS)
+
+        amount = float(data['amount'])
+        if amount <= 0:
+            raise ValueError("Budget amount must be greater than 0")
+
+        period = data.get('period', 'monthly')
+        if period not in {'monthly', 'quarterly', 'annual'}:
+            raise ValueError("Invalid budget period")
         
         budget = {
             "user_id": ObjectId(user_id),
             "name": data['name'],
-            "amount": float(data['amount']),
-            "period": data.get('period', 'monthly'), # Default monthly
+            "amount": amount,
+            "period": period, # Default monthly
             "scope": data.get('scope', {'type': 'global'}), # {type: 'service', value: 'Compute'}
             "thresholds": data.get('thresholds', [50, 80, 100]), # Percentages
             "created_at": datetime.utcnow(),
@@ -138,8 +146,6 @@ class BudgetService:
         
         # 2. Forecast Future Spend (for remaining days)
         forecasted_remaining = 0.0
-        forecast_alert = None
-        
         # Only forecast if we have remaining days
         if days_remaining > 0:
             filters = {}
@@ -158,8 +164,12 @@ class BudgetService:
                 forecasted_remaining = fc_res['total_predicted_cost']
 
         total_projected = actual_spend + forecasted_remaining
-        pct_consumed = (actual_spend / budget['amount']) * 100
-        pct_projected = (total_projected / budget['amount']) * 100
+        amount = float(budget.get('amount') or 0)
+        if amount <= 0:
+            return {"error": "Invalid budget amount"}
+
+        pct_consumed = (actual_spend / amount) * 100
+        pct_projected = (total_projected / amount) * 100
         
         # 3. Status & Alerts
         status = "Safe"
@@ -174,16 +184,17 @@ class BudgetService:
                 elif t >= 50 and status != "Critical": status = "Warning"
 
         # Check Forecast Breach
-        if total_projected > budget['amount']:
-             over_amount = total_projected - budget['amount']
-             alerts.append(f"Forecasted to exceed budget by ${over_amount:.2f}")
-             if status != "Critical": status = "Warning" # Forecast breach is at least a warning
+        if total_projected > amount:
+            over_amount = total_projected - amount
+            alerts.append(f"Forecasted to exceed budget by ${over_amount:.2f}")
+            if status != "Critical":
+                status = "Warning" # Forecast breach is at least a warning
 
         return {
             "budget": {
                 "id": str(budget['_id']),
                 "name": budget['name'],
-                "amount": budget['amount'],
+                "amount": amount,
                 "scope": budget['scope'],
                 "thresholds": budget['thresholds']
             },
@@ -199,7 +210,7 @@ class BudgetService:
                 "total_projected": round(total_projected, 2),
                 "pct_consumed": round(pct_consumed, 1),
                 "pct_projected": round(pct_projected, 1),
-                "remaining_amount": round(budget['amount'] - actual_spend, 2)
+                "remaining_amount": round(amount - actual_spend, 2)
             },
             "alerts": alerts
         }

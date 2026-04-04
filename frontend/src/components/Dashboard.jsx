@@ -76,6 +76,7 @@ const Dashboard = ({ globalFilters = {} }) => {
     setLoading(true);
     setCosts({ trends: [], summary: {} });
     setCategoryData(null);
+    setInsights(null);
 
     try {
       const timestamp = new Date().getTime();
@@ -94,16 +95,29 @@ const Dashboard = ({ globalFilters = {} }) => {
         queryParams.set('latest_month', 'true');
       }
 
+      const insightFilters = { ...allFilters };
+      if (selectedMonth && selectedMonth !== 'all') {
+        insightFilters.month = selectedMonth;
+      } else if (!hasSetInitialMonth.current && selectedMonth === 'all') {
+        insightFilters.latest_month = true;
+      }
+
       const [trendRes, insightRes] = await Promise.all([
         api.get(`/costs/trends/auto?${queryParams}`),
-        api.getDashboardInsights(allFilters).catch(() => ({ data: null }))
+        api.getDashboardInsights(insightFilters).catch(() => ({ data: null }))
       ]);
 
       if (insightRes.data?.success && insightRes.data?.has_data) {
         setInsights(insightRes.data);
+      } else {
+        // Clear previous insights when current filters/month have no insight data.
+        setInsights(null);
       }
 
-      if (trendRes.data && trendRes.data.summary && trendRes.data.summary.total_cost > 0) {
+      const hasTrendData = Array.isArray(trendRes.data?.trends) && trendRes.data.trends.length > 0;
+      const hasPeriods = Number(trendRes.data?.summary?.periods_count || 0) > 0;
+
+      if (trendRes.data && trendRes.data.summary && (hasTrendData || hasPeriods)) {
         // If backend detected the latest month, sync the frontend month selector
         if (!hasSetInitialMonth.current && trendRes.data.detected_month) {
           hasSetInitialMonth.current = true;

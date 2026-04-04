@@ -23,7 +23,10 @@ const ServiceAnalysis = ({ globalFilters = {} }) => {
       });
       const trendRes = await api.get(`/costs/trends/auto?${queryParams}`);
 
-      if (trendRes.data?.summary?.total_cost > 0) {
+      const hasTrendData = Array.isArray(trendRes.data?.trends) && trendRes.data.trends.length > 0;
+      const hasPeriods = Number(trendRes.data?.summary?.periods_count || 0) > 0;
+
+      if (hasTrendData || hasPeriods) {
         const trends = trendRes.data.trends.map(t => ({ ...t, date: t.period }));
         setCosts({ trends, summary: trendRes.data.summary });
         setHasData(true);

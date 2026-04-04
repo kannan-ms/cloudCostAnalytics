@@ -25,11 +25,14 @@ def load_model(service_name: str, user_id: str = None):
     try:
         # Sanitize filename
         safe_service = "".join([c if c.isalnum() else "_" for c in service_name])
-        # File naming convention: {service}_model.pkl (Simplified for offline training)
-        model_path = os.path.join(MODELS_DIR, f"{safe_service}_model.pkl")
-        
-        if os.path.exists(model_path):
-            return joblib.load(model_path)
+        candidates = []
+        if user_id:
+            candidates.append(os.path.join(MODELS_DIR, f"{user_id}_{safe_service}_model.pkl"))
+        candidates.append(os.path.join(MODELS_DIR, f"{safe_service}_model.pkl"))
+
+        for model_path in candidates:
+            if os.path.exists(model_path):
+                return joblib.load(model_path)
         return None
     except Exception as e:
         logging.error(f"Error loading model for {service_name}: {e}")
@@ -49,10 +52,14 @@ def load_scaler(service_name: str, user_id: str = None):
     try:
         # Sanitize filename
         safe_service = "".join([c if c.isalnum() else "_" for c in service_name])
-        scaler_path = os.path.join(MODELS_DIR, f"{safe_service}_scaler.pkl")
-        
-        if os.path.exists(scaler_path):
-            return joblib.load(scaler_path)
+        candidates = []
+        if user_id:
+            candidates.append(os.path.join(MODELS_DIR, f"{user_id}_{safe_service}_scaler.pkl"))
+        candidates.append(os.path.join(MODELS_DIR, f"{safe_service}_scaler.pkl"))
+
+        for scaler_path in candidates:
+            if os.path.exists(scaler_path):
+                return joblib.load(scaler_path)
         return None
     except Exception as e:
         logging.error(f"Error loading scaler for {service_name}: {e}")

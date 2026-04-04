@@ -17,6 +17,8 @@ from config import Config
 logger = logging.getLogger(__name__)
 _executor = ThreadPoolExecutor(max_workers=2)
 _last_sent_cache: Dict[str, datetime] = {}
+_CACHE_TTL_HOURS = 24
+_CACHE_MAX_KEYS = 10000
 
 
 def is_email_configured() -> bool:
@@ -25,6 +27,7 @@ def is_email_configured() -> bool:
 
 
 def _should_skip(user_id: str, key: str, cooldown_minutes: int) -> bool:
+    _prune_cache()
     now = datetime.utcnow()
     cache_key = f"{user_id}:{key}"
     last_sent = _last_sent_cache.get(cache_key)
@@ -32,6 +35,22 @@ def _should_skip(user_id: str, key: str, cooldown_minutes: int) -> bool:
         return True
     _last_sent_cache[cache_key] = now
     return False
+
+
+def _prune_cache() -> None:
+    """Remove stale entries and enforce a soft max-size bound."""
+    now = datetime.utcnow()
+    ttl = timedelta(hours=_CACHE_TTL_HOURS)
+
+    stale_keys = [k for k, ts in _last_sent_cache.items() if (now - ts) > ttl]
+    for k in stale_keys:
+        _last_sent_cache.pop(k, None)
+
+    # If still large, evict oldest keys first.
+    if len(_last_sent_cache) > _CACHE_MAX_KEYS:
+        overflow = len(_last_sent_cache) - _CACHE_MAX_KEYS
+        for key, _ in sorted(_last_sent_cache.items(), key=lambda item: item[1])[:overflow]:
+            _last_sent_cache.pop(key, None)
 
 
 def _build_message(to_email: str, subject: str, text_body: str, html_body: str) -> EmailMessage:
@@ -147,7 +166,8 @@ def queue_anomaly_email(
 def send_verification_email(to_email: str, name: str, otp: str) -> None:
     """Queue an OTP verification email."""
     if not is_email_configured():
-        raise RuntimeError("Email service is not configured")
+        logger.warning(f"Email not configured - skipping verification email for {to_email}")
+        return  # Don't fail, just skip sending
 
     subject = "Verify Your CloudInsight Account"
     

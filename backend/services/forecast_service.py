@@ -271,10 +271,16 @@ def predict_future_costs(
         df_resampled = df.resample(freq_code).sum().reset_index()
         df_resampled['cost'] = df_resampled['cost'].fillna(0)
         
-        # Exclude the last period (incomplete day/week) to avoid "drop-off" bias
-        # Especially important for daily granularity where "today" is partial.
-        if len(df_resampled) > 1:
-            df_resampled = df_resampled.iloc[:-1]
+        # Exclude incomplete current day only for daily granularity.
+        # Weekly/monthly periods should be kept to avoid dropping valid completed data.
+        if granularity == 'daily' and len(df_resampled) > 1:
+            now_utc = datetime.utcnow()
+            today_utc = now_utc.date()
+            last_period_date = df_resampled.iloc[-1]['date']
+            if hasattr(last_period_date, 'date'):
+                last_period_date = last_period_date.date()
+            if last_period_date >= today_utc:
+                df_resampled = df_resampled.iloc[:-1]
 
         # Prophet needs at least 2 points, but better more
         if len(df_resampled) < 2:
@@ -364,16 +370,23 @@ def get_detailed_forecast(
 
         insights = insight_service.generate_insights(global_forecast, service_forecasts)
 
-        # Calculate Growth & Risks
-        current_daily_avg = 0
+        # Calculate Growth & Risks (granularity-aware average per period)
+        current_period_avg = 0
         if len(global_forecast['history']) > 0:
-             current_daily_avg = sum(d['actual_cost'] for d in global_forecast['history']) / len(global_forecast['history'])
+             current_period_avg = sum(d['actual_cost'] for d in global_forecast['history']) / len(global_forecast['history'])
 
-        predicted_daily_avg = global_forecast['total_predicted_cost'] / periods_ahead
+        predicted_period_avg = global_forecast['total_predicted_cost'] / periods_ahead
         
         growth_pct = 0
-        if current_daily_avg > 0:
-            growth_pct = ((predicted_daily_avg - current_daily_avg) / current_daily_avg) * 100
+        if current_period_avg > 0:
+            growth_pct = ((predicted_period_avg - current_period_avg) / current_period_avg) * 100
+
+        period_unit_map = {
+            'daily': 'Day',
+            'weekly': 'Week',
+            'monthly': 'Month'
+        }
+        period_unit = period_unit_map.get(granularity, 'Period')
         
         # Risk Logic
         risks = []
@@ -421,10 +434,13 @@ def get_detailed_forecast(
                 "growth_percentage": round(growth_pct, 1),
                 "status_badge": status_badge,
                 "risks": risks,
-                "period_label": f"Next {periods_ahead} Days",
+                "period_label": f"Next {periods_ahead} {period_unit}{'' if periods_ahead == 1 else 's'}",
+                "period_unit": period_unit,
                 "confidence_score": global_forecast.get('confidence_score', 0),
-                "current_daily_avg": round(current_daily_avg, 2),
-                "predicted_daily_avg": round(predicted_daily_avg, 2)
+                "current_period_avg": round(current_period_avg, 2),
+                "predicted_period_avg": round(predicted_period_avg, 2),
+                "current_daily_avg": round(current_period_avg, 2),
+                "predicted_daily_avg": round(predicted_period_avg, 2)
             }
         }
         
