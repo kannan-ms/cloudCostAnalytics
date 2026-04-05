@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useMemo } from 'react';
 import { Loader, ChevronUp, ChevronDown } from 'lucide-react';
 import api from '../../services/api';
-import AdvancedForecast from './AdvancedForecast';
 import { ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { XAxisProps, YAxisProps, GridProps } from '../../utils/chartConfig.jsx';
 import { CARD_CONFIG, computeCardValues, InsightCard, ForecastTooltip, PredictedDot, RiskBadge, ServiceBreakdownTable } from './ForecastUtils';
 import { CHART_DEFS, ChartAreas, ChartLines, ChartReferences } from './ForecastChartConfig';
+
+const AdvancedForecast = lazy(() => import('./AdvancedForecast'));
 
 
 const Forecasts = () => {
@@ -150,7 +151,9 @@ const Forecasts = () => {
                 </button>
                 {showAdvanced && (
                     <div className="px-4 pb-5 border-t border-slate-100 pt-4">
-                        <AdvancedForecast />
+                        <Suspense fallback={<div className="py-4 text-sm text-slate-500">Loading advanced analysis...</div>}>
+                            <AdvancedForecast />
+                        </Suspense>
                     </div>
                 )}
             </div>

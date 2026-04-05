@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { lazy, Suspense, useState } from 'react';
 import MainLayout from '../layout/MainLayout';
-import Dashboard from './Dashboard';
-import Budgets from '../budget/Budgets';
-import Forecasts from '../forecast/Forecasts';
-import Reports from '../reports/Reports';
-import CloudIntegration from '../integration/CloudIntegration';
-import ServiceAnalysis from '../analysis/ServiceAnalysis';
-import AnomaliesPage from '../anomaly/AnomaliesPage';
+
+const Dashboard = lazy(() => import('./Dashboard'));
+const Budgets = lazy(() => import('../budget/Budgets'));
+const Forecasts = lazy(() => import('../forecast/Forecasts'));
+const Reports = lazy(() => import('../reports/Reports'));
+const CloudIntegration = lazy(() => import('../integration/CloudIntegration'));
+const ServiceAnalysis = lazy(() => import('../analysis/ServiceAnalysis'));
+const AnomaliesPage = lazy(() => import('../anomaly/AnomaliesPage'));
 
 const DashboardPage = ({ view }) => {
     const [globalFilters, setGlobalFilters] = useState({});
@@ -69,7 +70,9 @@ const DashboardPage = ({ view }) => {
             searchQuery={searchQuery}
             onSearchQueryChange={handleSearchQueryChange}
         >
-            {content}
+            <Suspense fallback={<div className="py-10 text-center text-sm text-slate-500">Loading view...</div>}>
+                {content}
+            </Suspense>
         </MainLayout>
     );
 };

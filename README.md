@@ -31,6 +31,8 @@ CloudInsight is a full-stack FinOps platform for analyzing multi-cloud spend (AW
 - Recharts and Chart.js
 - Axios
 - React Router
+- Route-level and view-level lazy loading (React.lazy + Suspense)
+- Manual vendor chunk splitting via Vite Rollup config
 
 ### Backend
 - Flask
@@ -77,10 +79,29 @@ cloudProject/
 │   ├── tailwind.config.js
 │   └── src/
 │       ├── components/
+│       │   ├── analysis/
+│       │   ├── anomaly/
+│       │   ├── auth/
+│       │   ├── budget/
+│       │   ├── charts/
+│       │   ├── dashboard/
+│       │   ├── forecast/
+│       │   ├── integration/
+│       │   ├── layout/
+│       │   ├── recommendations/
+│       │   └── reports/
 │       ├── services/
 │       └── utils/
 
 ````
+
+---
+
+## Frontend Performance Notes
+
+- Routes and major dashboard views are lazy loaded to reduce initial bundle cost.
+- Advanced forecast analysis is loaded only when the panel is expanded.
+- Vite manual chunking separates core React, chart libraries, and utility vendors.
 
 ---
 
