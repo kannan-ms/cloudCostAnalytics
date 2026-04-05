@@ -15,8 +15,8 @@ import {
   Pie,
   Treemap,
 } from 'recharts';
-import { CHART_COLORS, ChartGradients, XAxisProps, YAxisProps, GridProps } from '../utils/chartConfig.jsx';
-import SmartTooltip from './Charts/SmartTooltip';
+import { CHART_COLORS, ChartGradients, XAxisProps, YAxisProps, GridProps } from '../../utils/chartConfig.jsx';
+import SmartTooltip from '../charts/SmartTooltip';
 
 const SERIES_COLORS = [
   CHART_COLORS.primary,

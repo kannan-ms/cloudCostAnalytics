@@ -4,9 +4,9 @@ import {
     ComposedChart, Area
 } from 'recharts';
 import { Filter, Calendar, Layers, Activity, Download } from 'lucide-react';
-import api from '../services/api';
-import { CHART_COLORS, ChartGradients, XAxisProps, YAxisProps, GridProps } from '../utils/chartConfig.jsx';
-import SmartTooltip from './Charts/SmartTooltip';
+import api from '../../services/api';
+import { CHART_COLORS, ChartGradients, XAxisProps, YAxisProps, GridProps } from '../../utils/chartConfig.jsx';
+import SmartTooltip from '../charts/SmartTooltip';
 
 const AdvancedForecast = () => {
     // State

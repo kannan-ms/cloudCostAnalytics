@@ -15,7 +15,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { FaMicrosoft, FaAws, FaGoogle } from 'react-icons/fa';
-import api from '../services/api';
+import api from '../../services/api';
 
 // ─── Provider meta ───────────────────────────────────────────────────────────
 const PROVIDERS = [

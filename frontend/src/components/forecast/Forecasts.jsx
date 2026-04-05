@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Loader, ChevronUp, ChevronDown } from 'lucide-react';
-import api from '../services/api';
+import api from '../../services/api';
 import AdvancedForecast from './AdvancedForecast';
 import { ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { XAxisProps, YAxisProps, GridProps } from '../utils/chartConfig.jsx';
+import { XAxisProps, YAxisProps, GridProps } from '../../utils/chartConfig.jsx';
 import { CARD_CONFIG, computeCardValues, InsightCard, ForecastTooltip, PredictedDot, RiskBadge, ServiceBreakdownTable } from './ForecastUtils';
 import { CHART_DEFS, ChartAreas, ChartLines, ChartReferences } from './ForecastChartConfig';
 

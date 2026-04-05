@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Loader } from 'lucide-react';
-import api from '../services/api';
-import BudgetCard from './Budget/BudgetCard';
-import CreateBudgetModal from './Budget/CreateBudgetModal';
+import api from '../../services/api';
+import BudgetCard from './BudgetCard';
+import CreateBudgetModal from './CreateBudgetModal';
 
 const Budgets = () => {
     const [budgets, setBudgets] = useState([]);

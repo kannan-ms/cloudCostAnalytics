@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import AnomalyList from './AnomalyList';
 import AnomalyDetailsModal from './AnomalyDetailsModal';
-import api from '../services/api';
+import api from '../../services/api';
 
 
 const getDefaultAnomalies = () => {

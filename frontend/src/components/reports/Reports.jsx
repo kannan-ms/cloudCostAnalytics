@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Download, FileSpreadsheet, FilePieChart, Clock, AlertCircle, Loader2 } from 'lucide-react';
-import api from '../services/api';
+import api from '../../services/api';
 
 const Reports = () => {
     const [reports, setReports] = useState([]);

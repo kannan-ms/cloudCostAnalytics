@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { register, verifyOtp, resendOtp } from '../services/authService';
+import { register, verifyOtp, resendOtp } from '../../services/authService';
 import { Eye, EyeOff, LayoutDashboard, Check, ArrowRight, Mail } from 'lucide-react';
 
 function Register() {

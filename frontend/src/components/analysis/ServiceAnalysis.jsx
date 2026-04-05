@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   ArrowLeft, Search, Loader2, Database
 } from 'lucide-react';
-import CostChart from './CostChart';
-import api from '../services/api';
+import CostChart from '../dashboard/CostChart';
+import api from '../../services/api';
 
 const ServiceAnalysis = ({ globalFilters = {} }) => {
   const [costs, setCosts] = useState({ trends: [], summary: {} });

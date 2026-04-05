@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Upload, Download, FileSpreadsheet, X, CheckCircle, AlertTriangle, Lightbulb, File } from 'lucide-react';
-import api from '../services/api';
+import api from '../../services/api';
 
 const FileUpload = ({ onUploadSuccess, onSwitchToOverview }) => {
   const [file, setFile] = useState(null);

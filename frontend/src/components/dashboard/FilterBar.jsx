@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Filter } from 'lucide-react';
-import api from '../services/api';
+import api from '../../services/api';
 
 const FilterBar = ({ filters = {}, onFilterChange }) => {
     const [options, setOptions] = useState({

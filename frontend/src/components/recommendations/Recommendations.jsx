@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AlertCircle, TrendingUp, DollarSign, Zap, ArrowRight, Loader2, Target, Check } from 'lucide-react';
-import api from '../services/api';
+import api from '../../services/api';
 
 const Recommendations = () => {
     const [recommendations, setRecommendations] = useState([]);

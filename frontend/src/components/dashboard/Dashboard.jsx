@@ -22,7 +22,7 @@ import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip } from
 import CostChart, { SERIES_COLORS, CATEGORY_COLORS } from './CostChart';
 import FilterBar from './FilterBar';
 import EmptyState from './EmptyState';
-import api from '../services/api';
+import api from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 
 const Dashboard = ({ globalFilters = {} }) => {

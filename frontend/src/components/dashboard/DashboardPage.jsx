@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import MainLayout from './Layout/MainLayout';
+import MainLayout from '../layout/MainLayout';
 import Dashboard from './Dashboard';
-import Budgets from './Budgets';
-import Forecasts from './Forecasts';
-import Reports from './Reports';
-import CloudIntegration from './CloudIntegration';
-import ServiceAnalysis from './ServiceAnalysis';
-import AnomaliesPage from './AnomaliesPage';
+import Budgets from '../budget/Budgets';
+import Forecasts from '../forecast/Forecasts';
+import Reports from '../reports/Reports';
+import CloudIntegration from '../integration/CloudIntegration';
+import ServiceAnalysis from '../analysis/ServiceAnalysis';
+import AnomaliesPage from '../anomaly/AnomaliesPage';
 
 const DashboardPage = ({ view }) => {
     const [globalFilters, setGlobalFilters] = useState({});
