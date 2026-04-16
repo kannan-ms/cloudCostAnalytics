@@ -234,8 +234,54 @@ Data Flow
 Machine Learning
 Forecasting
 
-* Prophet model
-* Linear Regression fallback
+CloudInsight includes a cost forecasting pipeline that predicts future cloud spend from historical billing data to support proactive budgeting and capacity planning.
+
+Current forecasting methods in this project:
+
+* Prophet model (primary)
+* Linear Regression fallback (when Prophet is unavailable)
+
+The additive forecasting form is:
+
+$$
+y(t) = g(t) + s(t) + e(t)
+$$
+
+Where:
+
+* $g(t)$ captures long-term trend (growth or decline)
+* $s(t)$ captures recurring seasonal behavior (for example, weekly effects)
+* $e(t)$ captures residual noise
+
+For each forecast point, the system returns:
+
+* Predicted cost
+* Lower and upper confidence bounds
+* Trend label (increasing, decreasing, stable)
+* Model confidence score
+
+To keep forecasts realistic, negative predictions are clipped to zero and historical data is aggregated by selected granularity (daily, weekly, monthly).
+
+Recommended validation additions for documentation/reporting:
+
+* Evaluate forecast quality with MAE, RMSE, and MAPE on a holdout window
+* Compare forecasted and actual cost curves using rolling backtesting
+* Track model drift and retrain periodically when error exceeds an agreed threshold
+* Document known limitations (sudden architectural changes, one-time billing events, or missing tags can reduce accuracy)
+
+Suggested baseline target values (can be tuned per organization):
+
+| Metric | Suggested Target | Notes |
+|---|---|---|
+| Forecast MAPE (30-day horizon) | <= 15% | Good baseline for aggregated daily cloud spend forecasting |
+| Forecast RMSE | <= 12% of mean daily cost | Normalized RMSE target to handle different account sizes |
+| Forecast refresh frequency | Every 24 hours | Increase to 6-12 hours for highly dynamic workloads |
+| Forecast bias (mean error) | Between -5% and +5% | Helps ensure the model does not consistently under- or over-predict |
+| Forecast interval coverage (95% interval) | 90%-95% | Share of actual values inside forecast confidence bounds |
+| Backtesting window | Last 90 days (rolling) | Evaluate stability across recent billing cycles |
+| Retraining trigger | MAPE > 20% for 2 consecutive runs | Practical drift threshold for scheduled model refresh |
+
+These are forecasting-focused reference benchmarks for academic and project documentation. Final production thresholds should be calibrated using your actual billing volatility and business risk tolerance.
 
 Anomaly Detection
 
@@ -263,6 +309,64 @@ UI Screens
 
 ---
 
+## 2.4 Non-Functional Requirements
+
+### Performance
+
+- The system should ingest, preprocess, and analyze billing data within operationally acceptable latency for interactive use.
+- Dashboard pages, charts, and reports should render quickly enough to support near real-time monitoring and decision-making.
+- API endpoints for core workflows (ingestion, cost summary, anomaly detection, forecasting) should be optimized to avoid noticeable user delay under normal load.
+
+### Scalability
+
+- The platform must support growth in billing records across AWS, Azure, and GCP without significant throughput degradation.
+- The architecture should support horizontal scaling (multiple service instances) and vertical scaling (resource upgrades) based on workload.
+- Data pipelines should support partitioning and batching strategies for large datasets.
+- Caching should be applied to repeated read-heavy analytics queries to improve responsiveness.
+- The design should allow onboarding of additional cloud providers with minimal changes to existing modules.
+
+### Reliability
+
+- Identical input data should produce consistent and repeatable analytics, anomaly, and forecast outputs (within model tolerance).
+- The system should maintain high availability and graceful degradation during partial service failures.
+- Scheduled ingestion, monitoring, and analysis jobs should execute reliably with retry and failure-notification mechanisms.
+- Centralized error handling and structured logging must be implemented for observability and incident diagnosis.
+- Backup and recovery procedures must be defined and periodically validated to minimize data loss risk.
+
+### Accuracy
+
+- Anomaly detection should be tuned to minimize false positives and false negatives while preserving practical sensitivity.
+- Models should be trained and validated on diverse, representative datasets across providers and spending patterns.
+- Forecast outputs should be evaluated against historical trends using standard error metrics (for example, MAE, RMSE, or MAPE).
+- Periodic model evaluation and retraining should be performed to prevent performance drift.
+- Data preprocessing and feature engineering must remain consistent and validated to preserve model quality.
+
+### Usability
+
+- The dashboard must be intuitive for both technical and non-technical users.
+- Visualizations should clearly communicate spend trends, anomalies, and forecasted values.
+- Users should be able to filter and customize views by provider, account, service, and time range.
+- Important actions and states should include contextual guidance (tooltips, labels, and empty-state messaging).
+- Documentation should cover setup, workflows, and troubleshooting for efficient onboarding.
+
+### Security
+
+- Secrets (API keys, tokens, credentials) must be encrypted at rest and protected in transit using HTTPS/TLS.
+- Authentication should enforce strong credential and token practices.
+- Authorization should follow role-based access control (RBAC) to enforce least privilege.
+- Security logging, audit trails, and activity monitoring should be enabled for sensitive operations.
+- Regular vulnerability scanning, dependency checks, and security reviews should be part of the release process.
+
+### Maintainability
+
+- The codebase should follow a modular, loosely coupled architecture with clear service boundaries.
+- Coding standards, linting, and documentation should be enforced to improve long-term readability and supportability.
+- New features and refactors should preserve backward compatibility for stable APIs where required.
+- Version control and review workflows (branching, pull requests, code review) should govern all production changes.
+- Automated testing (unit, integration, and regression) should be used to detect breakage and ensure safe updates.
+
+---
+
 Future Improvements
 
 * Docker support
@@ -270,6 +374,28 @@ Future Improvements
 * Role-based access control
 * Unit and integration testing
 * Async processing with Redis
+
+---
+
+## Platform Comparison
+
+The following table compares CloudInsight with commonly used cloud cost management platforms.
+
+| Platform | Multi-Cloud Coverage (AWS/Azure/GCP) | Cost Visibility and Reporting | Budgeting and Alerts | Anomaly Detection | Forecasting | Deployment and Setup Complexity | Best Fit |
+|---|---|---|---|---|---|---|---|
+| CloudInsight (This Project) | Yes | Detailed dashboards, service-level trends, downloadable reports | Yes, budget tracking with alerts | ML-driven (Isolation Forest plus rule-based spike checks) | ML-based (Prophet with Linear Regression fallback) | Moderate; self-hosted Flask + React + MongoDB setup | Teams needing customizable, ML-enabled FinOps without enterprise platform lock-in |
+| CloudHealth by VMware | Yes | Strong enterprise reporting and policy views | Yes | Available, typically policy and rule oriented | Available, enterprise-focused planning features | High; enterprise-grade onboarding and governance configuration | Large enterprises with mature cloud governance programs |
+| Datadog Cloud Cost Management | Yes | Strong cost analytics integrated with observability data | Yes | Available through monitoring and alerting workflows | Available, often tied to broader observability workflows | Moderate to high; depends on existing Datadog adoption | Organizations already standardized on Datadog |
+| Apptio Cloudability | Yes | Strong financial allocation, chargeback, and cost analysis | Yes | Mostly rule-driven compared with ML-first anomaly pipelines | Forecasting available, typically finance workflow oriented | High; enterprise setup, governance, and process integration | Finance-led enterprise FinOps teams |
+| Flexera One (Cloud Cost Optimization) | Yes | Strong optimization and governance reporting | Yes | Available through optimization and policy engines | Available, optimization-focused | High; enterprise integration and policy setup effort | Large enterprises with complex license and cloud estates |
+| Kubecost | Partial (primarily Kubernetes workloads) | Strong Kubernetes cost and allocation visibility | Yes, Kubernetes-centric | Limited outside Kubernetes-specific contexts | Basic forecasting relative to enterprise FinOps suites | Low to moderate for Kubernetes environments | Teams focused on Kubernetes cost management |
+| Native Cloud Tools (AWS Cost Explorer, Azure Cost Management, GCP Billing) | Single provider per tool | Good provider-native reporting | Basic to moderate, provider dependent | Basic threshold and rule alerts | Basic forecasting and trend projections | Low to moderate; easiest within each provider | Teams operating mostly in one cloud provider |
+
+### Key Takeaways
+
+- CloudInsight differentiates with ML-first anomaly detection and forecasting while remaining deployable as a custom full-stack application.
+- Enterprise suites provide broader governance depth but usually require greater setup effort and higher licensing cost.
+- Native provider tools are usef
 
 ---
 
