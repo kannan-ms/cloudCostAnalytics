@@ -163,9 +163,17 @@ def _fetch_azure_api(credentials: Dict, start_date: str, end_date: str) -> pd.Da
 def _fetch_aws_api(credentials: Dict, start_date: str, end_date: str) -> pd.DataFrame:
     """
     Fetch billing data from AWS Cost Explorer.
-
+    
+    CRITICAL NOTES:
+    - Cost Explorer MUST use us-east-1 region (global endpoint)
+    - TimePeriod end_date is EXCLUSIVE (doesn't include that date)
+    - Uses UNBLENDED_COST metric (not UnblendedCost)
+    - Includes free tier and on-demand costs
+    - Costs may take 24 hours to appear in Cost Explorer
+    
     Required credentials:
-        aws_access_key_id, aws_secret_access_key, region_name (optional, default us-east-1)
+        aws_access_key_id, aws_secret_access_key
+        region_name (ignored - Cost Explorer only available in us-east-1)
     """
     try:
         import boto3
@@ -177,28 +185,126 @@ def _fetch_aws_api(credentials: Dict, start_date: str, end_date: str) -> pd.Data
     if missing:
         raise ValueError(f"Missing AWS credentials: {', '.join(missing)}")
 
+    # CRITICAL: Cost Explorer API ONLY works in us-east-1
     ce = boto3.client(
         "ce",
         aws_access_key_id=credentials["aws_access_key_id"],
         aws_secret_access_key=credentials["aws_secret_access_key"],
-        region_name=credentials.get("region_name", "us-east-1"),
+        region_name="us-east-1",  # MANDATORY - Cost Explorer is a global service
     )
 
-    response = ce.get_cost_and_usage(
-        TimePeriod={"Start": start_date, "End": end_date},
-        Granularity="DAILY",
-        Metrics=["UnblendedCost"],
-        GroupBy=[{"Type": "DIMENSION", "Key": "SERVICE"}],
-    )
+    logger.info(f"AWS Cost Explorer: Fetching {start_date} to {end_date} (end is exclusive)")
+    
+    # Try UNBLENDED_COST first (most common metric)
+    try:
+        response = ce.get_cost_and_usage(
+            TimePeriod={
+                "Start": start_date,
+                "End": end_date  # Exclusive - data returned UP TO but not including this date
+            },
+            Granularity="DAILY",
+            Metrics=["UNBLENDED_COST"],  # CRITICAL: Use UNBLENDED_COST, not UnblendedCost
+            GroupBy=[{"Type": "DIMENSION", "Key": "SERVICE"}],
+            Filter={
+                "Dimensions": {
+                    "Key": "RECORD_TYPE",
+                    "Values": [
+                        "Usage",      # Actual usage costs
+                        "Tax",        # Tax charges
+                        "Support",    # Support fees
+                        "Other",      # Other charges
+                        "Refund"      # Refunds
+                    ]
+                }
+            }
+        )
+        metric_used = "UNBLENDED_COST"
+        logger.info(f"AWS Cost Explorer: Got {len(response.get('ResultsByTime', []))} periods with UNBLENDED_COST")
+        
+    except Exception as e:
+        logger.warning(f"UNBLENDED_COST failed: {str(e)}, retrying with BLENDED_COST...")
+        try:
+            # Fallback: Try BLENDED_COST
+            response = ce.get_cost_and_usage(
+                TimePeriod={
+                    "Start": start_date,
+                    "End": end_date
+                },
+                Granularity="DAILY",
+                Metrics=["BLENDED_COST"],
+                GroupBy=[{"Type": "DIMENSION", "Key": "SERVICE"}],
+                Filter={
+                    "Dimensions": {
+                        "Key": "RECORD_TYPE",
+                        "Values": ["Usage", "Tax", "Support", "Other", "Refund"]
+                    }
+                }
+            )
+            metric_used = "BLENDED_COST"
+            logger.info(f"AWS Cost Explorer: Got {len(response.get('ResultsByTime', []))} periods with BLENDED_COST")
+            
+        except Exception as e2:
+            logger.error(f"Both UNBLENDED_COST and BLENDED_COST failed: {str(e2)}")
+            raise ValueError(
+                f"AWS Cost Explorer API failed with both metrics. Error: {str(e2)}. "
+                f"Verify: 1) Credentials valid, 2) Cost Explorer enabled (24hr wait), 3) Region us-east-1 works"
+            )
 
     records: List[Dict] = []
+    total_cost_from_api = 0
+    
     for result_by_time in response.get("ResultsByTime", []):
         day = result_by_time["TimePeriod"]["Start"]
+        day_total = 0
+        
         for group in result_by_time.get("Groups", []):
             service = group["Keys"][0]
-            amount = float(group["Metrics"]["UnblendedCost"]["Amount"])
-            records.append({"date": day, "service": service, "cost": amount})
+            # Get the metric value (handles both UnblendedCost and BlendedCost structures)
+            metrics = group.get("Metrics", {})
+            
+            # Try to get the cost value
+            cost_data = metrics.get(metric_used, {})
+            if isinstance(cost_data, dict):
+                amount = float(cost_data.get("Amount", 0))
+            else:
+                amount = float(cost_data or 0)
+            
+            if amount > 0 or True:  # Include ALL costs, even $0 (free tier resources)
+                records.append({
+                    "date": day,
+                    "service": service,
+                    "cost": amount
+                })
+                day_total += amount
+        
+        total_cost_from_api += day_total
+        if day_total > 0:
+            logger.debug(f"  {day}: ${day_total:.2f}")
 
+    logger.info(
+        f"AWS Cost Explorer: Fetched {len(records)} service records, "
+        f"Total: ${total_cost_from_api:.2f}, Metric: {metric_used}"
+    )
+
+    if len(records) == 0:
+        logger.warning(
+            f"AWS returned 0 cost records for {start_date} to {end_date}. "
+            f"This could mean: 1) No costs in this period, 2) Cost Explorer delay (24hr), "
+            f"3) Credentials lack ce:GetCostAndUsage permission"
+        )
+
+    df = pd.DataFrame(records)
+    if not df.empty:
+        df["date"] = pd.to_datetime(df["date"])
+        df["cost"] = pd.to_numeric(df["cost"], errors="coerce")
+        # Remove NaN costs
+        df = df.dropna(subset=["cost"])
+    
+    df["provider"] = "aws"
+    return df
+
+    logger.info(f"AWS API fetched {len(records)} cost records from {start_date} to {end_date}")
+    
     df = pd.DataFrame(records)
     if not df.empty:
         df["date"] = pd.to_datetime(df["date"])
@@ -335,9 +441,11 @@ def normalize_and_aggregate(df: pd.DataFrame) -> pd.DataFrame:
     ready for ML inference by the anomaly detector.
     """
     if df.empty:
+        logger.warning("normalize_and_aggregate: Input DataFrame is empty")
         return pd.DataFrame(columns=["date", "category", "cost", "provider"])
 
     df = df.copy()
+    logger.info(f"normalize_and_aggregate: Starting with {len(df)} rows")
 
     # Ensure correct types
     if not pd.api.types.is_datetime64_any_dtype(df["date"]):
@@ -353,6 +461,7 @@ def normalize_and_aggregate(df: pd.DataFrame) -> pd.DataFrame:
 
     # Category mapping
     df["category"] = df["service"].map(SERVICE_CATEGORIES).fillna("Other")
+    logger.info(f"normalize_and_aggregate: Categories mapped - {df['category'].unique().tolist()}")
 
     # Aggregation – sum cost per (date, category, provider)
     agg_df = (
@@ -361,6 +470,10 @@ def normalize_and_aggregate(df: pd.DataFrame) -> pd.DataFrame:
         .sort_values(["date", "category"])
         .reset_index(drop=True)
     )
+    
+    logger.info(f"normalize_and_aggregate: After aggregation - {len(agg_df)} rows")
+    if len(agg_df) > 0:
+        logger.info(f"normalize_and_aggregate: Total cost = {agg_df['cost'].sum()}")
 
     return agg_df
 
@@ -416,11 +529,30 @@ def fetch_cloud_cost_data(
     if provider not in ("azure", "aws", "gcp"):
         return False, f"Unsupported provider '{provider}'. Must be 'azure', 'aws', or 'gcp'."
 
-    # Default date range – last 30 days
+    # Default date range – current month for accurate billing
     if not start_date:
-        start_date = (datetime.utcnow() - timedelta(days=30)).strftime("%Y-%m-%d")
+        # Start from first day of current month (most accurate for billing)
+        today = datetime.utcnow()
+        start_date = today.replace(day=1).strftime("%Y-%m-%d")
+    else:
+        try:
+            datetime.strptime(start_date, "%Y-%m-%d")
+        except ValueError:
+            return False, f"Invalid start_date format: {start_date}. Use YYYY-MM-DD"
+    
     if not end_date:
-        end_date = datetime.utcnow().strftime("%Y-%m-%d")
+        # AWS/GCP end_date is exclusive - add 1 day to include today's data
+        end_date = (datetime.utcnow() + timedelta(days=1)).strftime("%Y-%m-%d")
+    else:
+        try:
+            datetime.strptime(end_date, "%Y-%m-%d")
+        except ValueError:
+            return False, f"Invalid end_date format: {end_date}. Use YYYY-MM-DD"
+    
+    logger.info(
+        f"fetch_cloud_cost_data: Provider={provider}, source_type={source_type}, "
+        f"date_range={start_date} to {end_date} (end_date is exclusive for AWS/GCP)"
+    )
 
     # ── Fetch raw data ────────────────────────────────────────────────────
     try:
@@ -452,7 +584,11 @@ def fetch_cloud_cost_data(
 
     # ── Validate fetched data ─────────────────────────────────────────────
     if raw_df is None or raw_df.empty:
-        return False, "No billing data returned for the given parameters."
+        logger.warning(f"No billing data returned for provider={provider}, date_range={start_date} to {end_date}")
+        if source_type == "api":
+            return False, f"AWS returned no data. Check: 1) Credentials validity, 2) Cost Explorer enabled, 3) Account has costs in {start_date} to {end_date}"
+        else:
+            return False, "No billing data found in uploaded file."
 
     required_cols = {"date", "service", "cost"}
     if not required_cols.issubset(set(raw_df.columns)):

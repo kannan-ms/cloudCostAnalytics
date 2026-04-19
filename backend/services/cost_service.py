@@ -304,14 +304,14 @@ def get_costs(
         # Build query
         query = {"user_id": ObjectId(user_id)}
         
-        # Date range filter
-        if start_date:
-            query["usage_start_date"] = {"$gte": start_date}
-        if end_date:
-            if "usage_start_date" in query:
-                query["usage_start_date"]["$lte"] = end_date
-            else:
-                query["usage_end_date"] = {"$lte": end_date}
+        # Date range filter - Fixed: Always use usage_start_date for consistency
+        if start_date or end_date:
+            date_filter = {}
+            if start_date:
+                date_filter["$gte"] = start_date
+            if end_date:
+                date_filter["$lte"] = end_date
+            query["usage_start_date"] = date_filter
         
         # Provider filter
         if provider:
@@ -526,15 +526,15 @@ def get_cost_summary(
     try:
         costs_collection = get_collection(Collections.CLOUD_COSTS)
         
-        # Build match stage
+        # Build match stage - Fixed: Always use usage_start_date for consistency
         match_stage = {"user_id": ObjectId(user_id)}
-        if start_date:
-            match_stage["usage_start_date"] = {"$gte": start_date}
-        if end_date:
-            if "usage_start_date" in match_stage:
-                match_stage["usage_start_date"]["$lte"] = end_date
-            else:
-                match_stage["usage_end_date"] = {"$lte": end_date}
+        if start_date or end_date:
+            date_filter = {}
+            if start_date:
+                date_filter["$gte"] = start_date
+            if end_date:
+                date_filter["$lte"] = end_date
+            match_stage["usage_start_date"] = date_filter
         
         # Map group_by to field name
         group_field_map = {

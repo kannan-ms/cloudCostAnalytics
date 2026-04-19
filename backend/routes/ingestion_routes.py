@@ -59,8 +59,11 @@ def _persist_normalized_costs(user_id: str, result_df):
 
         # The normalized ingestion output uses category-level aggregation.
         # Persist category as service_name so downstream analytics remain consistent.
+        # Normalize provider to canonical casing (AWS, Azure, GCP)
+        provider_map = {"aws": "AWS", "azure": "Azure", "gcp": "GCP"}
+        normalized_provider = provider_map.get(str(row.get("provider", "Other")).strip().lower(), "Other")
         records.append({
-            "provider": str(row.get("provider", "Other")).strip().title(),
+            "provider": normalized_provider,
             "service_name": str(row.get("category", "Other")).strip() or "Other",
             "cost": normalized_cost,
             "usage_start_date": row_date,
