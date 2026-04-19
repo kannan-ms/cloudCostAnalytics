@@ -4,6 +4,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 const Login = lazy(() => import('./components/auth/Login'));
 const Register = lazy(() => import('./components/auth/Register'));
 const DashboardPage = lazy(() => import('./components/dashboard/DashboardPage'));
+const InsightsPage = lazy(() => import('./components/recommendations/InsightsPage'));
+const Recommendations = lazy(() => import('./components/recommendations/Recommendations'));
 
 function App() {
   const isAuthenticated = () => {
@@ -73,6 +75,22 @@ function App() {
             element={
               <PrivateRoute>
                 <DashboardPage view="integrations" />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/recommendations"
+            element={
+              <PrivateRoute>
+                <Recommendations />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/insights"
+            element={
+              <PrivateRoute>
+                <InsightsPage />
               </PrivateRoute>
             }
           />

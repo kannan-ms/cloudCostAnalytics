@@ -9,7 +9,9 @@ import {
   Cloud,
   Plug,
   Layers,
-  AlertTriangle
+  AlertTriangle,
+  Activity,
+  Lightbulb
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -187,6 +189,18 @@ const Sidebar = ({ globalFilters = {}, onGlobalFilterChange }) => {
           <div className="px-4 text-[10px] font-bold uppercase text-slate-500 tracking-widest mb-2">
             Analysis
           </div>
+          <NavItem
+            icon={Activity}
+            label="Insights"
+            path="/insights"
+            active={location.pathname === '/insights'}
+          />
+          <NavItem
+            icon={Lightbulb}
+            label="Recommendations"
+            path="/recommendations"
+            active={location.pathname === '/recommendations'}
+          />
           <NavItem
             icon={FileText}
             label="Reports"

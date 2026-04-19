@@ -88,4 +88,7 @@ api.ingestAndDetect = (provider, file) => {
 
 api.getCategories = () => api.get('/ingestion/categories');
 
+// Insights Endpoints
+api.getInsights = (days = 30) => api.post('/recommendations/insights', { days });
+
 export default api;

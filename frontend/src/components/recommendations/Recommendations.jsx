@@ -1,15 +1,41 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AlertCircle, TrendingUp, DollarSign, Zap, ArrowRight, Loader2, Target, Check } from 'lucide-react';
 import api from '../../services/api';
+import InsightsCard from './InsightsCard';
+import InsightsSummary from './InsightsSummary';
+import MainLayout from '../layout/MainLayout';
 
-const Recommendations = () => {
+const RecommendationsContent = () => {
     const [recommendations, setRecommendations] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    
+    // Insights state
+    const [insights, setInsights] = useState([]);
+    const [insightsSummary, setInsightsSummary] = useState(null);
+    const [insightsLoading, setInsightsLoading] = useState(true);
+    const [insightsError, setInsightsError] = useState(null);
 
     useEffect(() => {
         fetchRecommendations();
+        fetchInsights();
     }, []);
+
+    const fetchInsights = async () => {
+        try {
+            setInsightsLoading(true);
+            const response = await api.getInsights(30);
+            if (response.data.success) {
+                setInsights(response.data.insights || []);
+                setInsightsSummary(response.data.summary || {});
+            }
+        } catch (err) {
+            console.error('Failed to load insights:', err);
+            setInsightsError(null); // Silently fail, insights are optional
+        } finally {
+            setInsightsLoading(false);
+        }
+    };
 
     const fetchRecommendations = async () => {
         try {
@@ -268,8 +294,52 @@ const Recommendations = () => {
                         )}
                     </>
                 )}
+
+                {/* Smart Cost Insights Section */}
+                {!insightsError && insights.length > 0 && (
+                    <div className="mt-12 pt-8 border-t border-slate-200">
+                        <div className="mb-8">
+                            <h2 className="text-2xl font-bold text-slate-900 mb-2">
+                                Smart Cost Insights
+                            </h2>
+                            <p className="text-slate-600 text-base">
+                                AI-detected patterns and anomalies in your cloud spending
+                            </p>
+                        </div>
+
+                        {/* Insights Summary */}
+                        {insightsSummary && !insightsLoading && (
+                            <InsightsSummary summary={insightsSummary} />
+                        )}
+
+                        {/* Insights Loading State */}
+                        {insightsLoading && (
+                            <div className="flex flex-col items-center justify-center py-12">
+                                <Loader2 className="w-8 h-8 text-blue-500 animate-spin mb-3" />
+                                <p className="text-slate-600 text-sm">Analyzing cost patterns...</p>
+                            </div>
+                        )}
+
+                        {/* Insights Cards */}
+                        {!insightsLoading && insights.length > 0 && (
+                            <div className="grid grid-cols-1 gap-4">
+                                {insights.map((insight, index) => (
+                                    <InsightsCard key={index} insight={insight} />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
+    );
+};
+
+const Recommendations = () => {
+    return (
+        <MainLayout currentView="recommendations">
+            <RecommendationsContent />
+        </MainLayout>
     );
 };
 

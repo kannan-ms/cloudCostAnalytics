@@ -1,13 +1,38 @@
 """
-Insight Service
-Generates natural language insights based on cost forecasts and trends.
+Insight Service - Smart Cost Insights
+Generates natural language insights based on cost forecasts, trends, and detailed analysis.
+
+Features:
+- Time period comparison (current vs previous)
+- Insight detection (increase, decrease, spikes)
+- Root cause approximation (region analysis)
+- Severity scoring and sorting
+- Edge case handling
 """
 
-from typing import Dict, List
+from typing import Dict, List, Tuple, Optional
+from datetime import datetime, timedelta
+from collections import defaultdict
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Constants
+MIN_PERCENTAGE_CHANGE = 15  # Percentage threshold for insights
+MIN_COST_DIFFERENCE = 100   # ₹ threshold for insights
+MIN_COST_AMOUNT = 10        # Ignore costs below this threshold
+SPIKE_MULTIPLIER = 1.5      # Cost spike = average * SPIKE_MULTIPLIER
+TOP_INSIGHTS_LIMIT = 3      # Return top N insights
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# LEGACY FUNCTIONS (Maintained for backward compatibility)
+# ───────────────────────────────────────────────────────────────────────────
 
 def generate_insights(global_forecast: Dict, service_forecasts: List[Dict]) -> List[str]:
     """
-    Generate a list of insight strings based on forecast data.
+    Legacy function: Generate insights from forecast data.
+    Maintained for backward compatibility.
     """
     insights = []
     
@@ -46,6 +71,7 @@ def generate_insights(global_forecast: Dict, service_forecasts: List[Dict]) -> L
 def _calculate_growth(data: Dict) -> int:
     """
     Calculate simple growth percentage from first to last point of forecast.
+    Legacy function.
     """
     try:
         points = data.get('forecast', [])
@@ -61,3 +87,505 @@ def _calculate_growth(data: Dict) -> int:
         return round(abs(pct))
     except:
         return 0
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# SMART COST INSIGHTS - TIME COMPARISON LOGIC
+# ───────────────────────────────────────────────────────────────────────────
+
+def calculate_period_cost(costs_data: List[Dict], service: Optional[str] = None) -> float:
+    """
+    Calculate total cost for a period, optionally filtered by service.
+    
+    Args:
+        costs_data: List of cost records with 'cost' and optional 'service' fields
+        service: Filter by specific service (optional)
+    
+    Returns:
+        Total cost for the period
+    """
+    total = 0.0
+    for record in costs_data:
+        if record.get('cost') is None:
+            continue
+        
+        if service and record.get('service', '').lower() != service.lower():
+            continue
+        
+        try:
+            total += float(record['cost'])
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid cost value: {record.get('cost')}")
+            continue
+    
+    return total
+
+
+def get_percentage_change(current: float, previous: float) -> float:
+    """
+    Calculate percentage change between two values.
+    Handles division by zero.
+    
+    Formula: ((current - previous) / previous) * 100
+    
+    Args:
+        current: Current period value
+        previous: Previous period value
+    
+    Returns:
+        Percentage change (can be negative for decreases)
+    """
+    if previous == 0:
+        return 100.0 if current > 0 else 0.0
+    
+    return ((current - previous) / previous) * 100
+
+
+def split_into_periods(cost_data: List[Dict], days: int) -> Tuple[List[Dict], List[Dict]]:
+    """
+    Split cost data into current and previous periods of equal length.
+    
+    Args:
+        cost_data: Sorted list of cost records with 'date' field (YYYY-MM-DD)
+        days: Number of days in each period
+    
+    Returns:
+        Tuple of (current_period_data, previous_period_data)
+    """
+    if not cost_data or len(cost_data) < 2:
+        return cost_data, []
+    
+    try:
+        # Parse dates to find the split point
+        dates = sorted(set(record.get('date') for record in cost_data if record.get('date')))
+        
+        if len(dates) < days:
+            return cost_data, []
+        
+        split_index = len(dates) - days
+        split_date = dates[split_index]
+        
+        current = [r for r in cost_data if r.get('date', '') >= split_date]
+        previous = [r for r in cost_data if r.get('date', '') < split_date and 
+                   r.get('date', '') >= dates[max(0, split_index - days)]]
+        
+        return current, previous
+    except Exception as e:
+        logger.error(f"Error splitting periods: {e}")
+        return cost_data, []
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# SMART COST INSIGHTS - SPIKE DETECTION
+# ───────────────────────────────────────────────────────────────────────────
+
+def detect_spikes(cost_data: List[Dict], service: Optional[str] = None) -> List[Dict]:
+    """
+    Detect cost spikes in daily data.
+    Spike = any day where cost > (average * SPIKE_MULTIPLIER)
+    
+    Args:
+        cost_data: List of daily cost records with 'date' and 'cost' fields
+        service: Filter by specific service (optional)
+    
+    Returns:
+        List of spike records with date, service, cost, and average
+    """
+    spikes = []
+    
+    # Filter by service if provided
+    filtered_data = cost_data
+    if service:
+        filtered_data = [r for r in cost_data if r.get('service', '').lower() == service.lower()]
+    
+    if not filtered_data or len(filtered_data) < 3:
+        return spikes
+    
+    # Calculate average cost (excluding the highest outlier for robustness)
+    costs = [float(r.get('cost', 0)) for r in filtered_data 
+             if r.get('cost') is not None and float(r.get('cost', 0)) >= MIN_COST_AMOUNT]
+    
+    if not costs:
+        return spikes
+    
+    # Use median instead of mean for better outlier resistance
+    costs_sorted = sorted(costs)
+    average = sum(costs_sorted[:-1]) / len(costs_sorted[:-1]) if len(costs_sorted) > 1 else costs_sorted[0]
+    spike_threshold = average * SPIKE_MULTIPLIER
+    
+    # Find spikes
+    for record in filtered_data:
+        cost = float(record.get('cost', 0))
+        if cost >= spike_threshold:
+            spikes.append({
+                'date': record.get('date'),
+                'service': record.get('service', 'Unknown'),
+                'cost': cost,
+                'average': average,
+                'excess': cost - average
+            })
+    
+    return sorted(spikes, key=lambda x: x['cost'], reverse=True)
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# SMART COST INSIGHTS - ROOT CAUSE APPROXIMATION
+# ───────────────────────────────────────────────────────────────────────────
+
+def analyze_region_contribution(current_data: List[Dict], previous_data: List[Dict], 
+                               service: str) -> Tuple[Optional[str], float]:
+    """
+    Analyze which region contributed most to cost change for a service.
+    
+    Args:
+        current_data: Current period cost records
+        previous_data: Previous period cost records
+        service: Service name to analyze
+    
+    Returns:
+        Tuple of (top_region, contribution_percentage)
+    """
+    current_by_region = defaultdict(float)
+    previous_by_region = defaultdict(float)
+    
+    for record in current_data:
+        if record.get('service', '').lower() == service.lower():
+            region = record.get('region', 'unknown')
+            current_by_region[region] += float(record.get('cost', 0))
+    
+    for record in previous_data:
+        if record.get('service', '').lower() == service.lower():
+            region = record.get('region', 'unknown')
+            previous_by_region[region] += float(record.get('cost', 0))
+    
+    if not current_by_region:
+        return None, 0.0
+    
+    # Find region with largest increase
+    max_increase = 0
+    top_region = None
+    
+    for region in current_by_region:
+        current = current_by_region[region]
+        previous = previous_by_region.get(region, 0)
+        increase = current - previous
+        
+        if increase > max_increase:
+            max_increase = increase
+            top_region = region
+    
+    # Calculate contribution percentage
+    total_change = sum(current_by_region.values()) - sum(previous_by_region.values())
+    if total_change == 0:
+        return top_region, 0.0
+    
+    contribution = (max_increase / abs(total_change)) * 100 if total_change != 0 else 0
+    
+    return top_region, contribution
+
+
+def get_root_cause(current_data: List[Dict], previous_data: List[Dict], 
+                   service: str, change_type: str) -> str:
+    """
+    Generate root cause explanation based on available data.
+    
+    Args:
+        current_data: Current period data
+        previous_data: Previous period data
+        service: Service name
+        change_type: 'increase', 'decrease', or 'spike'
+    
+    Returns:
+        Root cause explanation string
+    """
+    if change_type == 'increase':
+        region, _ = analyze_region_contribution(current_data, previous_data, service)
+        if region and region.lower() != 'unknown':
+            return f"mainly driven by {region}"
+        return "likely due to increased usage or new resources"
+    
+    elif change_type == 'decrease':
+        return "due to reduced usage or removed resources"
+    
+    elif change_type == 'spike':
+        return "temporary spike detected in usage"
+    
+    return "cost change detected"
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# SMART COST INSIGHTS - SEVERITY & CONFIDENCE
+# ───────────────────────────────────────────────────────────────────────────
+
+def calculate_severity(percentage_change: float, cost_difference: float) -> str:
+    """
+    Calculate severity level based on percentage change and cost difference.
+    
+    Rules:
+    - > 50% change → high
+    - 20–50% → medium
+    - <20% → low
+    
+    Args:
+        percentage_change: Percentage change value (can be negative)
+        cost_difference: Absolute cost difference
+    
+    Returns:
+        'high', 'medium', or 'low'
+    """
+    abs_percentage = abs(percentage_change)
+    
+    if abs_percentage > 50 or cost_difference > 500:
+        return 'high'
+    elif abs_percentage >= 20 or cost_difference > 200:
+        return 'medium'
+    else:
+        return 'low'
+
+
+def calculate_confidence_score(data_points: int, consistency: float) -> float:
+    """
+    Calculate confidence score based on data availability and consistency.
+    
+    Factors:
+    - Number of data points (more = higher confidence)
+    - Consistency of measurements (less variance = higher confidence)
+    
+    Args:
+        data_points: Number of records in the period
+        consistency: Coefficient of variation (0-1, lower is better)
+    
+    Returns:
+        Confidence score (0-100)
+    """
+    # Base confidence on data points
+    point_score = min(data_points / 30 * 100, 80)
+    
+    # Adjust for consistency
+    consistency_score = max(0, (1 - min(consistency, 1)) * 20)
+    
+    return min(point_score + consistency_score, 100)
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# SMART COST INSIGHTS - MAIN GENERATION ENGINE
+# ───────────────────────────────────────────────────────────────────────────
+
+def generate_smart_insights(cost_data: List[Dict], period_days: int = 7) -> List[Dict]:
+    """
+    Generate comprehensive cost insights from cost data.
+    
+    Main Function: Orchestrates all insight generation.
+    
+    Args:
+        cost_data: List of cost records with date, service, region, cost fields
+        period_days: Number of days for period comparison (default: 7)
+    
+    Returns:
+        List of insight dictionaries with type, service, message, severity, confidence
+    """
+    insights = []
+    
+    if not cost_data or len(cost_data) < 2:
+        return insights
+    
+    try:
+        # Split data into periods
+        current_data, previous_data = split_into_periods(cost_data, period_days)
+        
+        if not current_data or not previous_data:
+            # Fall back to spike detection only
+            return _detect_spike_insights(current_data)
+        
+        # Get unique services
+        services = set(r.get('service', 'Unknown') for r in cost_data if r.get('service'))
+        
+        # Generate comparison insights for each service
+        for service in services:
+            if service.lower() == 'unknown':
+                continue
+            
+            current_cost = calculate_period_cost(current_data, service)
+            previous_cost = calculate_period_cost(previous_data, service)
+            
+            # Skip if costs too small
+            if current_cost < MIN_COST_AMOUNT and previous_cost < MIN_COST_AMOUNT:
+                continue
+            
+            # Skip if no change
+            if current_cost == previous_cost:
+                continue
+            
+            # Calculate metrics
+            percentage_change = get_percentage_change(current_cost, previous_cost)
+            cost_difference = current_cost - previous_cost
+            
+            # Check if insight threshold met
+            if abs(percentage_change) < MIN_PERCENTAGE_CHANGE and abs(cost_difference) < MIN_COST_DIFFERENCE:
+                continue
+            
+            # Determine insight type
+            if cost_difference > 0:
+                insight_type = 'increase'
+                message_template = f"{service} cost increased by {{pct}}% compared to previous {period_days} days"
+            else:
+                insight_type = 'decrease'
+                message_template = f"{service} cost decreased by {{pct}}% compared to previous {period_days} days"
+            
+            # Get root cause
+            root_cause = get_root_cause(current_data, previous_data, service, insight_type)
+            
+            # Build message
+            message = message_template.format(pct=abs(round(percentage_change, 1)))
+            if root_cause:
+                message += f", {root_cause}"
+            
+            # Calculate confidence
+            data_count = len(current_data) + len(previous_data)
+            costs_current = [float(r.get('cost', 0)) for r in current_data 
+                           if r.get('service', '').lower() == service.lower() and r.get('cost')]
+            if costs_current and len(costs_current) > 1:
+                avg_cost = sum(costs_current) / len(costs_current)
+                variance = sum((c - avg_cost) ** 2 for c in costs_current) / len(costs_current)
+                consistency = (variance ** 0.5) / avg_cost if avg_cost > 0 else 1
+            else:
+                consistency = 0.5
+            
+            confidence = calculate_confidence_score(data_count, consistency)
+            
+            # Create insight
+            insight = {
+                'type': insight_type,
+                'service': service,
+                'message': message,
+                'severity': calculate_severity(percentage_change, abs(cost_difference)),
+                'confidence': round(confidence, 1),
+                'current_cost': round(current_cost, 2),
+                'previous_cost': round(previous_cost, 2),
+                'percentage_change': round(percentage_change, 2),
+                'cost_difference': round(cost_difference, 2),
+                'period_days': period_days
+            }
+            
+            insights.append(insight)
+        
+        # Add spike insights
+        spike_insights = _detect_spike_insights(current_data)
+        insights.extend(spike_insights)
+        
+    except Exception as e:
+        logger.error(f"Error generating smart insights: {e}")
+        return []
+    
+    # Sort by severity and impact
+    severity_order = {'high': 0, 'medium': 1, 'low': 2}
+    insights.sort(
+        key=lambda x: (
+            severity_order.get(x['severity'], 3),
+            -abs(x.get('cost_difference', 0)),
+            -x.get('confidence', 0)
+        )
+    )
+    
+    # Return top insights
+    return insights[:TOP_INSIGHTS_LIMIT]
+
+
+def _detect_spike_insights(cost_data: List[Dict]) -> List[Dict]:
+    """
+    Helper function to detect spike insights from cost data.
+    
+    Args:
+        cost_data: Cost records with date, service, cost fields
+    
+    Returns:
+        List of spike insights
+    """
+    spikes = []
+    services = set(r.get('service', 'Unknown') for r in cost_data if r.get('service'))
+    
+    for service in services:
+        if service.lower() == 'unknown':
+            continue
+        
+        detected_spikes = detect_spikes(cost_data, service)
+        
+        for spike in detected_spikes[:1]:  # Only top spike per service
+            spike_date = spike.get('date', 'Unknown')
+            excess_cost = spike.get('excess', 0)
+            
+            message = f"Cost spike detected on {spike_date} for {service}: ₹{round(excess_cost, 2)} higher than average"
+            
+            insight = {
+                'type': 'spike',
+                'service': service,
+                'message': message,
+                'severity': 'high' if excess_cost > 200 else 'medium',
+                'confidence': 85.0,
+                'spike_date': spike_date,
+                'spike_cost': round(spike.get('cost', 0), 2),
+                'average_cost': round(spike.get('average', 0), 2),
+                'excess': round(excess_cost, 2)
+            }
+            
+            spikes.append(insight)
+    
+    return spikes
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# SMART COST INSIGHTS - OUTPUT FORMATTING
+# ───────────────────────────────────────────────────────────────────────────
+
+def format_insights(insights: List[Dict], format_type: str = 'json') -> List[Dict]:
+    """
+    Format insights for output/display.
+    
+    Args:
+        insights: List of generated insights
+        format_type: Output format ('json', 'summary')
+    
+    Returns:
+        Formatted insights
+    """
+    if format_type == 'summary':
+        return [
+            {
+                'type': i['type'],
+                'service': i['service'],
+                'message': i['message'],
+                'severity': i['severity']
+            }
+            for i in insights
+        ]
+    
+    return insights
+
+
+def get_insights_summary(insights: List[Dict]) -> Dict:
+    """
+    Get summary statistics of insights.
+    
+    Args:
+        insights: List of insights
+    
+    Returns:
+        Summary dictionary - FRONTEND FORMAT
+    """
+    severity_counts = defaultdict(int)
+    type_counts = defaultdict(int)
+    total_cost_impact = 0
+    
+    for insight in insights:
+        severity_counts[insight.get('severity', 'low')] += 1
+        type_counts[insight.get('type', 'unknown')] += 1
+        total_cost_impact += abs(insight.get('cost_difference', 0))
+    
+    # Format for frontend: individual severity keys
+    return {
+        'total_insights': len(insights),
+        'high_severity': severity_counts.get('high', 0),
+        'medium_severity': severity_counts.get('medium', 0),
+        'low_severity': severity_counts.get('low', 0),
+        'total_cost_impact': round(total_cost_impact, 2)
+    }

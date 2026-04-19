@@ -412,6 +412,61 @@ def get_cost_by_id(user_id: str, cost_id: str) -> Tuple[bool, any]:
         return False, f"Error retrieving cost: {str(e)}"
 
 
+def get_user_cost_data(user_id: str, days: int = 30) -> List[Dict]:
+    """
+    Fetch raw cost data for insights generation.
+    Optimized for analysis functions (minimal transformations).
+    
+    Args:
+        user_id: User's ID
+        days: Number of days to fetch (default: 30)
+    
+    Returns:
+        List of cost records with essential fields for analysis
+    """
+    try:
+        costs_collection = get_collection(Collections.CLOUD_COSTS)
+        
+        # Calculate date range
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days)
+        
+        # Fetch records
+        cursor = costs_collection.find({
+            "user_id": ObjectId(user_id),
+            "usage_start_date": {
+                "$gte": start_date,
+                "$lte": end_date
+            }
+        }).sort("usage_start_date", 1)
+        
+        # Format for insights (minimal processing)
+        cost_data = []
+        for doc in cursor:
+            # Extract date as YYYY-MM-DD string
+            usage_date = doc['usage_start_date']
+            if isinstance(usage_date, datetime):
+                date_str = usage_date.strftime('%Y-%m-%d')
+            else:
+                date_str = str(usage_date)
+            
+            cost_data.append({
+                'date': date_str,
+                'service': doc.get('service_name', 'Unknown'),
+                'region': doc.get('region', 'unknown'),
+                'cost': float(doc.get('cost', 0)),
+                'provider': doc.get('provider', 'Other'),
+                'usage_quantity': float(doc.get('usage_quantity', 0)) if doc.get('usage_quantity') else 0,
+                'usage_unit': doc.get('usage_unit', '')
+            })
+        
+        return cost_data
+        
+    except Exception as e:
+        logger.error(f"Error fetching user cost data for insights: {e}")
+        return []
+
+
 def update_cost(user_id: str, cost_id: str, update_data: Dict) -> Tuple[bool, any]:
     """
     Update a cost record.
