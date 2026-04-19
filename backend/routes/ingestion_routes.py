@@ -24,17 +24,30 @@ ingestion_routes = Blueprint("ingestion", __name__, url_prefix="/api/ingestion")
 
 
 def _persist_normalized_costs(user_id: str, result_df):
-    """Persist normalized ingestion rows into cloud_costs using existing service validation."""
+    """
+    Persist normalized ingestion rows into cloud_costs using existing service validation.
+    Handles null/None values gracefully and validates all required fields.
+    """
+    if result_df is None or result_df.empty:
+        return True, {
+            "total_records": 0,
+            "success_count": 0,
+            "error_count": 0,
+            "errors": []
+        }
+    
     records = []
     parse_errors = []
+    
     for row_index, row in result_df.iterrows():
-        row_date = row.get("date")
-        
-        # Handle missing or invalid dates by skipping invalid rows.
-        if hasattr(row_date, "to_pydatetime"):
-            row_date = row_date.to_pydatetime()
-        
         try:
+            # Parse and validate date
+            row_date = row.get("date")
+            
+            # Handle missing or invalid dates by skipping invalid rows.
+            if hasattr(row_date, "to_pydatetime"):
+                row_date = row_date.to_pydatetime()
+            
             if row_date is None or pd.isna(row_date):
                 parse_errors.append({"row": int(row_index), "field": "date", "error": "Missing date"})
                 continue
@@ -47,46 +60,106 @@ def _persist_normalized_costs(user_id: str, result_df):
             elif not isinstance(row_date, datetime):
                 parse_errors.append({"row": int(row_index), "field": "date", "error": "Unsupported date type"})
                 continue
-        except Exception:
-            parse_errors.append({"row": int(row_index), "field": "date", "error": "Date parsing failed"})
-            continue
 
-        try:
-            normalized_cost = float(row.get("cost", 0) or 0)
-        except (TypeError, ValueError):
-            parse_errors.append({"row": int(row_index), "field": "cost", "error": "Invalid numeric cost"})
-            continue
+            # Parse and validate cost
+            try:
+                cost_val = row.get("cost")
+                if cost_val is None or pd.isna(cost_val):
+                    parse_errors.append({"row": int(row_index), "field": "cost", "error": "Missing cost value"})
+                    continue
+                normalized_cost = float(cost_val)
+            except (TypeError, ValueError) as e:
+                parse_errors.append({"row": int(row_index), "field": "cost", "error": f"Invalid numeric cost: {str(e)}"})
+                continue
 
-        # The normalized ingestion output uses category-level aggregation.
-        # Persist category as service_name so downstream analytics remain consistent.
-        # Normalize provider to canonical casing (AWS, Azure, GCP)
-        provider_map = {"aws": "AWS", "azure": "Azure", "gcp": "GCP"}
-        normalized_provider = provider_map.get(str(row.get("provider", "Other")).strip().lower(), "Other")
-        records.append({
-            "provider": normalized_provider,
-            "service_name": str(row.get("category", "Other")).strip() or "Other",
-            "cost": normalized_cost,
-            "usage_start_date": row_date,
-            "usage_end_date": row_date,
-            "region": row.get("region", "global"),
-            "currency": "USD",
-            "cloud_account_id": row.get("account_id", ""),
-            "usage_quantity": float(row.get("usage_quantity", 0)) if row.get("usage_quantity") else 0,
-            "usage_unit": row.get("usage_unit", ""),
-            "tags": row.get("tags", {}) if isinstance(row.get("tags"), dict) else {},
-            "metadata": {
-                "source": "ingestion",
-                "aggregation": "category_daily",
-                "ingested_at": datetime.utcnow().isoformat()
-            }
-        })
+            # Extract and normalize provider
+            provider_val = row.get("provider")
+            if provider_val is None or pd.isna(provider_val):
+                provider_val = "Other"
+            else:
+                provider_val = str(provider_val).strip().lower()
+            
+            provider_map = {"aws": "AWS", "azure": "Azure", "gcp": "GCP"}
+            normalized_provider = provider_map.get(provider_val, "Other")
+
+            # Extract category/service name - must not be empty
+            category_val = row.get("category")
+            if category_val is None or pd.isna(category_val):
+                service_name = "Other"
+            else:
+                service_name = str(category_val).strip()
+                if not service_name:
+                    service_name = "Other"
+
+            # Safe extraction of optional fields
+            def safe_get_str(field_name, default=""):
+                """Safely extract a string field, handling None/NaN values."""
+                val = row.get(field_name)
+                if val is None or (isinstance(val, float) and pd.isna(val)):
+                    return default
+                return str(val).strip() if val is not None else default
+
+            def safe_get_float(field_name, default=0.0):
+                """Safely extract a float field, handling None/NaN values."""
+                val = row.get(field_name)
+                if val is None or (isinstance(val, float) and pd.isna(val)):
+                    return default
+                try:
+                    return float(val)
+                except (TypeError, ValueError):
+                    return default
+
+            def safe_get_dict(field_name, default=None):
+                """Safely extract a dict field, handling None/NaN values."""
+                val = row.get(field_name)
+                if val is None or (isinstance(val, float) and pd.isna(val)):
+                    return default if default is not None else {}
+                if isinstance(val, dict):
+                    return val
+                return default if default is not None else {}
+
+            # Build record with safe field extraction
+            region = safe_get_str("region", "global")
+            account_id = safe_get_str("account_id", "")
+            usage_unit = safe_get_str("usage_unit", "")
+            currency = safe_get_str("currency", "USD")
+            usage_quantity = safe_get_float("usage_quantity", 0.0)
+            tags = safe_get_dict("tags", {})
+
+            records.append({
+                "provider": normalized_provider,
+                "service_name": service_name,
+                "cost": normalized_cost,
+                "usage_start_date": row_date,
+                "usage_end_date": row_date,
+                "region": region,
+                "currency": currency,
+                "cloud_account_id": account_id,
+                "usage_quantity": usage_quantity,
+                "usage_unit": usage_unit,
+                "tags": tags,
+                "metadata": {
+                    "source": "ingestion",
+                    "aggregation": "category_daily",
+                    "ingested_at": datetime.utcnow().isoformat()
+                }
+            })
+
+        except Exception as e:
+            parse_errors.append({
+                "row": int(row_index),
+                "field": "row",
+                "error": f"Row processing failed: {str(e)}"
+            })
+            logger.exception(f"Error processing row {row_index}")
+            continue
 
     if not records:
         return True, {
             "total_records": 0,
             "success_count": 0,
-            "error_count": 0,
-            "errors": []
+            "error_count": len(parse_errors),
+            "errors": parse_errors[:10]
         }
 
     total_records = len(records)
@@ -181,6 +254,9 @@ def ingest_from_api(current_user_id):
     if not success:
         return jsonify({"error": result}), 400
 
+    if result is None or result.empty:
+        return jsonify({"error": "No data returned from cloud provider"}), 400
+
     ingest_ok, ingest_result = _persist_normalized_costs(current_user_id, result)
     if not ingest_ok:
         return jsonify({"error": ingest_result.get("error", "Failed to persist ingested data")}), 500
@@ -190,13 +266,13 @@ def ingest_from_api(current_user_id):
     
     # result is a normalised DataFrame
     summary = {
-        "rows_ingest": len(result),
-        "categories": result["category"].unique().tolist() if len(result) > 0 else [],
+        "rows_ingest": len(result) if result is not None else 0,
+        "categories": result["category"].unique().tolist() if result is not None and len(result) > 0 else [],
         "date_range": {
-            "from": str(result["date"].min().date()) if len(result) > 0 else "N/A",
-            "to": str(result["date"].max().date()) if len(result) > 0 else "N/A",
+            "from": str(result["date"].min().date()) if result is not None and len(result) > 0 else "N/A",
+            "to": str(result["date"].max().date()) if result is not None and len(result) > 0 else "N/A",
         },
-        "total_cost": round(float(result["cost"].sum()), 2) if len(result) > 0 else 0,
+        "total_cost": round(float(result["cost"].sum()), 2) if result is not None and len(result) > 0 else 0,
         "database_insert": {
             "success_count": ingest_result["success_count"],
             "error_count": ingest_result["error_count"],
@@ -249,6 +325,9 @@ def ingest_from_file(current_user_id):
     if not success:
         return jsonify({"error": result}), 400
 
+    if result is None or result.empty:
+        return jsonify({"error": "No data returned from file"}), 400
+
     ingest_ok, ingest_result = _persist_normalized_costs(current_user_id, result)
     if not ingest_ok:
         return jsonify({"error": ingest_result.get("error", "Failed to persist ingested data")}), 500
@@ -257,13 +336,13 @@ def ingest_from_file(current_user_id):
     logger.info(f"File ingestion completed: {ingest_result['success_count']} records inserted, {ingest_result['error_count']} errors")
     
     summary = {
-        "rows_ingest": len(result),
-        "categories": result["category"].unique().tolist() if len(result) > 0 else [],
+        "rows_ingest": len(result) if result is not None else 0,
+        "categories": result["category"].unique().tolist() if result is not None and len(result) > 0 else [],
         "date_range": {
-            "from": str(result["date"].min().date()) if len(result) > 0 else "N/A",
-            "to": str(result["date"].max().date()) if len(result) > 0 else "N/A",
+            "from": str(result["date"].min().date()) if result is not None and len(result) > 0 else "N/A",
+            "to": str(result["date"].max().date()) if result is not None and len(result) > 0 else "N/A",
         },
-        "total_cost": round(float(result["cost"].sum()), 2) if len(result) > 0 else 0,
+        "total_cost": round(float(result["cost"].sum()), 2) if result is not None and len(result) > 0 else 0,
         "database_insert": {
             "success_count": ingest_result["success_count"],
             "error_count": ingest_result["error_count"],
@@ -337,56 +416,88 @@ def ingest_and_detect(current_user_id):
     if not success:
         return jsonify({"error": result}), 400
 
+    if result is None or result.empty:
+        return jsonify({"error": "No data returned from source"}), 400
+
     ingest_ok, ingest_result = _persist_normalized_costs(current_user_id, result)
     if not ingest_ok:
         return jsonify({"error": ingest_result.get("error", "Failed to persist ingested data")}), 500
 
     # Run ML anomaly detection on the normalized DataFrame
-    anomalies = detect_anomalies_from_dataframe(result)
+    anomalies = detect_anomalies_from_dataframe(result) if result is not None else []
     
-    # Store detected anomalies to database
+    # Store detected anomalies to database WITH deduplication
     if anomalies:
         try:
             from database import get_collection, Collections
             from bson import ObjectId
+            from datetime import timedelta
             
             anomalies_col = get_collection(Collections.ANOMALIES)
+            
+            # Deduplication: find the date range from detected anomalies
+            if anomalies:
+                earliest_anomaly = min(a['detected_at'] for a in anomalies)
+                dedup_start = earliest_anomaly - timedelta(days=1)
+            else:
+                dedup_start = datetime.utcnow() - timedelta(days=30)
+            
+            # Find existing anomalies in this date range
+            existing = list(anomalies_col.find({
+                "user_id": ObjectId(current_user_id),
+                "detected_at": {"$gte": dedup_start}
+            }, {"service_name": 1, "detected_at": 1}))
+            
+            # Create set for O(1) lookup: (service, date_string)
+            existing_keys = set(
+                (e['service_name'], e['detected_at'].strftime('%Y-%m-%d')) 
+                for e in existing if 'detected_at' in e
+            )
+            
+            # Filter to only NEW anomalies
             anomaly_docs = []
             for anom in anomalies:
-                anom_doc = {
-                    "user_id": ObjectId(current_user_id),
-                    "service_name": anom.get("service_name"),
-                    "detected_value": anom.get("detected_value"),
-                    "expected_value": anom.get("expected_value"),
-                    "deviation_percentage": anom.get("deviation_percentage"),
-                    "severity": anom.get("severity"),
-                    "message": anom.get("message"),
-                    "detected_at": anom.get("detected_at", datetime.utcnow()),
-                    "created_at": datetime.utcnow()
-                }
-                anomaly_docs.append(anom_doc)
+                key = (anom.get("service_name"), anom.get("detected_at", datetime.utcnow()).strftime('%Y-%m-%d'))
+                
+                if key not in existing_keys:
+                    anom_doc = {
+                        "user_id": ObjectId(current_user_id),
+                        "service_name": anom.get("service_name"),
+                        "detected_value": anom.get("detected_value"),
+                        "expected_value": anom.get("expected_value"),
+                        "threshold": anom.get("threshold"),
+                        "deviation_percentage": anom.get("deviation_percentage"),
+                        "severity": anom.get("severity"),
+                        "message": anom.get("message"),
+                        "detected_at": anom.get("detected_at", datetime.utcnow()),
+                        "created_at": datetime.utcnow(),
+                        "type": "ingestion",
+                        "status": "new"
+                    }
+                    anomaly_docs.append(anom_doc)
+                    existing_keys.add(key)
             
             if anomaly_docs:
                 anomalies_col.insert_many(anomaly_docs)
-                logger.info(f"Stored {len(anomaly_docs)} anomalies for user {current_user_id}")
+                logger.info(f"Stored {len(anomaly_docs)} NEW anomalies (deduped) for user {current_user_id}")
         except Exception as e:
             logger.error(f"Failed to store anomalies: {e}")
 
     return jsonify({
         "success": True,
         "ingestion": {
-            "rows_processed": len(result) if len(result) > 0 else 0,
-            "categories": result["category"].unique().tolist() if len(result) > 0 else [],
-            "total_cost": round(float(result["cost"].sum()), 2) if len(result) > 0 else 0,
+            "rows_processed": len(result) if result is not None and len(result) > 0 else 0,
+            "categories": result["category"].unique().tolist() if result is not None and len(result) > 0 else [],
+            "total_cost": round(float(result["cost"].sum()), 2) if result is not None and len(result) > 0 else 0,
             "database_insert": {
                 "success_count": ingest_result["success_count"],
                 "error_count": ingest_result["error_count"]
             },
         },
         "anomalies_detected": {
-            "total": len(anomalies),
-            "stored": len(anomalies),
-            "items": anomalies[:10]  # Show first 10
+            "total": len(anomalies) if anomalies else 0,
+            "stored": len(anomalies) if anomalies else 0,
+            "items": anomalies[:10] if anomalies else []  # Show first 10
         },
     }), 200
 

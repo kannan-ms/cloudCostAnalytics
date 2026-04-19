@@ -11,7 +11,6 @@ from bson import ObjectId
 from database import get_collection, Collections
 from schemas import User
 from config import Config
-from services.email_service import send_verification_email, is_email_configured
 
 logger = logging.getLogger(__name__)
 
@@ -144,26 +143,15 @@ def create_user(name, email, password):
     # Create user document
     user_doc = User.create_document(name.strip(), email, password_hash)
     
-    # Generate OTP
-    import random
-    otp_code = f"{random.randint(100000, 999999)}"
-    user_doc['otp_code'] = otp_code
-    user_doc['otp_expires_at'] = datetime.utcnow() + timedelta(minutes=15)
+    # Skip email verification - mark user as verified immediately
+    user_doc['is_verified'] = True
+    user_doc['verified_at'] = datetime.utcnow()
 
     # Insert into database
     users_collection = get_collection(Collections.USERS)
     result = users_collection.insert_one(user_doc)
     
-    # Try to send verification email if configured
-    if is_email_configured():
-        try:
-            send_verification_email(email, name.strip(), otp_code)
-        except Exception as exc:
-            # In development, log the error but don't fail registration
-            logger.warning(f"Failed to send verification email: {str(exc)}")
-            # Don't roll back - allow registration without email
-    else:
-        logger.info("Email not configured - skipping verification email for development")
+    logger.info(f"[CREATE_USER] User {email} created and automatically verified (email verification skipped)")
     
     # Return user without password
     return True, {

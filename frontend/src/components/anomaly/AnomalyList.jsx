@@ -48,19 +48,23 @@ const AnomalyList = ({ anomalies, onAnomalyClick }) => {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto max-h-full pr-2">
-      {anomalies.map((item, index) => {
+      {anomalies.map((item) => {
         const cost = item.detected_value || item.cost || 0;
         const average = item.expected_value || item.average || 0;
         const date = item.detected_at || item.date || new Date().toISOString();
         const service = item.service_name || item.service || 'Unknown Service';
         const severity = item.severity || 'low';
         
+        // Create a unique, stable key from service + date + cost
+        // This ensures the same anomaly always gets the same key
+        const anomalyKey = `${service}_${new Date(date).toISOString().split('T')[0]}_${Math.round(cost * 100)}`;
+        
         const style = getSeverityConfig(severity);
         const Icon = style.icon;
 
         return (
           <div
-            key={index}
+            key={anomalyKey}
             className={`rounded-lg border ${style.border} bg-white p-5 shadow-sm hover:shadow transition-shadow cursor-pointer`}
             onClick={() => onAnomalyClick && onAnomalyClick(item)}
             title="View details"

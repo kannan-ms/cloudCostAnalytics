@@ -57,7 +57,7 @@ def register():
         
         # Return success response
         return jsonify({
-            'message': 'Registration successful. Please verify your email.',
+            'message': 'Account created successfully. You can now login.',
             'email': result['email'],
             'user_id': result['id']
         }), 201

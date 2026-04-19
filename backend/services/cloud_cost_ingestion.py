@@ -28,39 +28,55 @@ from ml.category_mapper import SERVICE_CATEGORIES, get_category
 
 # ---------------------------------------------------------------------------
 # PART 3: FILE-BASED CSV COLUMN MAPPINGS (per provider)
+# Now supports normalized (case-insensitive) matching via _resolve_column
 # ---------------------------------------------------------------------------
 
 _FILE_COLUMN_MAPS = {
     "azure": {
-        "date": ["Date", "UsageStartDate", "usage_start_date"],
-        "service": ["MeterCategory", "ServiceName", "service_name"],
-        "cost": ["CostInBillingCurrency", "Cost", "cost"],
+        "date": [
+            "UsageStartDate", "usage_start_date", "Date", "UsageDateTime", 
+            "usagedatetime", "usage_date", "start_date", "from_date", 
+            "period_start", "begin_date"
+        ],
+        "service": [
+            "MeterCategory", "ServiceName", "service_name", "Service", 
+            "Product", "product_name", "resource_type", "consumed_service",
+            "ConsumedService", "SKU Description"
+        ],
+        "cost": [
+            "CostInBillingCurrency", "Cost", "cost", "PreTaxCost", "pretaxcost",
+            "charge", "price", "total_cost", "billed_cost", "unrounded_cost"
+        ],
     },
     "aws": {
         "date": [
-            "lineItem/UsageStartDate",
-            "bill/BillingPeriodStartDate",
-            "UsageStartDate",
-            "usage_start_date",
+            "lineItem/UsageStartDate", "bill/BillingPeriodStartDate", 
+            "UsageStartDate", "usage_start_date", "Date", "date", 
+            "start_date", "from_date", "period_start"
         ],
         "service": [
-            "product/ProductName",
-            "lineItem/ProductCode",
-            "ProductName",
-            "service_name",
+            "product/ProductName", "lineItem/ProductCode", "ProductName", 
+            "service_name", "Service", "Product", "product_code", 
+            "service_description", "resource_type"
         ],
         "cost": [
-            "lineItem/UnblendedCost",
-            "lineItem/BlendedCost",
-            "BlendedCost",
-            "UnblendedCost",
-            "cost",
+            "lineItem/UnblendedCost", "lineItem/BlendedCost", "BlendedCost", 
+            "UnblendedCost", "cost", "Cost", "AmortizedCost", "charge", "price"
         ],
     },
     "gcp": {
-        "date": ["usage_start_time", "start_time", "usage_start_date"],
-        "service": ["service.description", "service_description", "service_name"],
-        "cost": ["cost", "total_cost"],
+        "date": [
+            "usage_start_time", "start_time", "usage_start_date", "Date", 
+            "date", "start_date", "from_date", "period_start"
+        ],
+        "service": [
+            "service.description", "service_description", "service_name", 
+            "Service", "Product", "product_name", "service", "resource_type"
+        ],
+        "cost": [
+            "cost", "total_cost", "Cost", "TotalCost", "charge", "price",
+            "billed_cost", "amortized_cost"
+        ],
     },
 }
 
@@ -303,15 +319,6 @@ def _fetch_aws_api(credentials: Dict, start_date: str, end_date: str) -> pd.Data
     df["provider"] = "aws"
     return df
 
-    logger.info(f"AWS API fetched {len(records)} cost records from {start_date} to {end_date}")
-    
-    df = pd.DataFrame(records)
-    if not df.empty:
-        df["date"] = pd.to_datetime(df["date"])
-        df["cost"] = pd.to_numeric(df["cost"], errors="coerce")
-    df["provider"] = "aws"
-    return df
-
 
 def _fetch_gcp_api(credentials: Dict, start_date: str, end_date: str) -> pd.DataFrame:
     """
@@ -376,11 +383,27 @@ def _fetch_gcp_api(credentials: Dict, start_date: str, end_date: str) -> pd.Data
 # PART 3 – FILE UPLOAD PARSER
 # ---------------------------------------------------------------------------
 
+def _normalize_column_name(col: str) -> str:
+    """Normalize column names for flexible matching."""
+    if not col:
+        return ""
+    return str(col).lower().strip().replace(' ', '_').replace('-', '_').replace('/', '_')
+
+
 def _resolve_column(df_columns: List[str], candidates: List[str]) -> Optional[str]:
-    """Return the first column name from *candidates* that exists in *df_columns*."""
-    for c in candidates:
-        if c in df_columns:
-            return c
+    """
+    Return the first column name from df_columns that matches any candidate (case-insensitive).
+    Uses normalized matching for maximum flexibility.
+    """
+    # Create a map of normalized names to actual column names
+    normalized_cols = {_normalize_column_name(col): col for col in df_columns}
+    
+    # Try to match candidates
+    for candidate in candidates:
+        normalized_candidate = _normalize_column_name(candidate)
+        if normalized_candidate in normalized_cols:
+            return normalized_cols[normalized_candidate]
+    
     return None
 
 

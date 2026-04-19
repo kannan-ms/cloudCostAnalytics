@@ -48,6 +48,7 @@ def validate_file_size(file_size: int) -> Tuple[bool, Optional[str]]:
 def parse_date(date_value: Any) -> Optional[datetime]:
     """
     Parse various date formats to datetime object.
+    Returns None if parsing fails or value is empty/None.
     """
     if date_value is None or date_value == '':
         return None
@@ -56,11 +57,27 @@ def parse_date(date_value: Any) -> Optional[datetime]:
     if isinstance(date_value, datetime):
         return date_value
     
-    # If it's an Excel serial date (float/int), we can't easily parse it without pandas/xlrd helper logic
-    # usually openpyxl gives us datetime objects if the cell is formatted as date.
+    # If integer, could be Excel serial date or Unix timestamp
+    if isinstance(date_value, (int, float)):
+        # Try as Unix timestamp (seconds since epoch)
+        if 0 < date_value < 10000000000:  # Reasonable timestamp range
+            try:
+                return datetime.utcfromtimestamp(date_value)
+            except (ValueError, OSError, OverflowError):
+                pass
+        # Try as Excel serial date (1900-01-01 is 1)
+        if 1 < date_value < 100000:
+            try:
+                return datetime(1900, 1, 1) + __import__('datetime').timedelta(days=date_value - 2)
+            except (ValueError, OverflowError):
+                pass
     
     # If string, try various formats
     if isinstance(date_value, str):
+        date_str = date_value.strip()
+        if not date_str:
+            return None
+            
         date_formats = [
             '%Y-%m-%d',
             '%Y/%m/%d',
@@ -69,18 +86,24 @@ def parse_date(date_value: Any) -> Optional[datetime]:
             '%Y-%m-%d %H:%M:%S',
             '%Y-%m-%dT%H:%M:%S',
             '%Y-%m-%dT%H:%M:%SZ',
+            '%Y-%m-%dT%H:%M:%S.%f',
+            '%Y-%m-%dT%H:%M:%S.%fZ',
             '%m-%d-%Y',
             '%d-%m-%Y',
-            '%d-%m-%Y %H:%M',   # Added for GCP format: 01-08-2024 22:24
-            '%m-%d-%Y %H:%M'
+            '%d-%m-%Y %H:%M',
+            '%m-%d-%Y %H:%M',
+            '%Y%m%d',  # YYYYMMDD format
+            '%d-%b-%Y',  # 01-Jan-2024
+            '%d %b %Y',  # 01 Jan 2024
         ]
         
         for fmt in date_formats:
             try:
-                return datetime.strptime(date_value.strip(), fmt)
-            except:
+                return datetime.strptime(date_str, fmt)
+            except ValueError:
                 continue
     
+    # Failed to parse
     return None
 
 
@@ -111,7 +134,7 @@ def map_columns(headers: List[str]) -> Dict[str, str]:
         'usage_unit': ['usage_unit', 'unit', 'measurement_unit'],
         'cost': ['cost', 'charge', 'price', 'total_cost', 'billed_cost', 'unrounded_cost_($)', 'rounded_cost_($)', 'total_cost_(inr)', 'costinbillingcurrency', 'pretaxcost'],
         'currency': ['currency', 'currency_code', 'billingcurrency', 'billing_currency'],
-        'usage_start_date': ['usage_start_date', 'start_date', 'from_date', 'begin_date', 'period_start', 'usage_start_time', 'start_time', 'date', 'usage_date', 'usagedatetime'],
+        'usage_start_date': ['usage_start_date', 'start_date', 'from_date', 'begin_date', 'period_start', 'usage_start_time', 'start_time', 'date', 'usage_date', 'usagedatetime', 'usagestartdate'],
         'usage_end_date': ['usage_end_date', 'end_date', 'to_date', 'finish_date', 'period_end', 'usage_end_time', 'end_time'],
         'tags': ['tags', 'labels', 'metadata'],
     }
@@ -159,18 +182,19 @@ def _infer_provider(consumed_service: Optional[str] = None, service_name: Option
     """
     Infer cloud provider from consumed_service or service_name.
     Azure services start with 'Microsoft.', AWS with 'Amazon'/'AWS', GCP with 'Google'.
+    If no clear match, returns 'Other' instead of defaulting incorrectly.
     """
     for hint in [consumed_service, service_name]:
         if not hint:
             continue
-        h = str(hint).lower()
+        h = str(hint).lower().strip()
         if h.startswith('microsoft.') or 'azure' in h:
             return 'Azure'
         if h.startswith('amazon') or h.startswith('aws') or 'aws' in h:
             return 'AWS'
-        if h.startswith('google') or 'gcp' in h or h.startswith('cloud '):
+        if h.startswith('google') or 'gcp' in h or h.startswith('cloud.'):
             return 'GCP'
-    return 'Azure'  # default fallback
+    return 'Other'  # Unknown provider - don't guess
 
 
 def extract_cost_records(rows: List[Dict[str, Any]], column_mapping: Dict[str, str], parse_errors: Optional[List[Dict[str, Any]]] = None) -> List[Dict]:
@@ -196,86 +220,107 @@ def extract_cost_records(rows: List[Dict[str, Any]], column_mapping: Dict[str, s
             if provider:
                 record['provider'] = str(provider).strip().lower()
             else:
-                record['provider'] = _infer_provider(
+                inferred = _infer_provider(
                     consumed_service=str(consumed_service) if consumed_service else None,
                     service_name=str(get_val('service_name')) if get_val('service_name') else None
                 )
+                record['provider'] = inferred.lower()
             
-            # Service name (required)
+            # Service name (required) - must not be empty
             service = get_val('service_name')
-            if service:
-                record['service_name'] = str(service).strip()
+            if not service or not str(service).strip():
+                if parse_errors is not None:
+                    parse_errors.append({'row': row_index, 'field': 'service_name', 'error': 'Missing or empty service name'})
+                continue
+            record['service_name'] = str(service).strip()
             
-            # Cost (required)
+            # Cost (required) - must be numeric and reasonable
             cost = get_val('cost')
-            if cost is not None:
-                try:
-                    # Handle currency symbols and commas if valid string
-                    if isinstance(cost, str):
-                        cost = cost.replace('$', '').replace('\u20ac', '').replace('\u00a3', '').replace(',', '').strip()
-                    record['cost'] = float(cost)
-                except Exception:
-                    if parse_errors is not None:
-                        parse_errors.append({'row': row_index, 'field': 'cost', 'error': 'Invalid numeric value'})
-                    continue
+            if cost is None or cost == '':
+                if parse_errors is not None:
+                    parse_errors.append({'row': row_index, 'field': 'cost', 'error': 'Missing cost value'})
+                continue
             
-            # Dates
+            try:
+                # Handle currency symbols and commas if valid string
+                if isinstance(cost, str):
+                    cost = cost.replace('$', '').replace('\u20ac', '').replace('\u00a3', '').replace(',', '').strip()
+                cost_float = float(cost)
+                # Allow negative costs (refunds) and zero costs (free tier), but catch NaN/Inf
+                if not (cost_float == cost_float):  # NaN check
+                    raise ValueError("Invalid cost: NaN")
+                record['cost'] = cost_float
+            except (ValueError, TypeError) as e:
+                if parse_errors is not None:
+                    parse_errors.append({'row': row_index, 'field': 'cost', 'error': f'Invalid numeric value: {str(e)}'})
+                continue
+            
+            # Dates (required)
             start_date = parse_date(get_val('usage_start_date'))
-            if start_date:
-                record['usage_start_date'] = start_date.isoformat()
+            if not start_date:
+                if parse_errors is not None:
+                    parse_errors.append({'row': row_index, 'field': 'usage_start_date', 'error': 'Missing or invalid start date'})
+                continue
+            record['usage_start_date'] = start_date.isoformat()
             
             end_date = parse_date(get_val('usage_end_date'))
             if end_date:
                 record['usage_end_date'] = end_date.isoformat()
-            elif start_date:
+            else:
                 # If no end date column, default to start date
                 record['usage_end_date'] = start_date.isoformat()
             
             # Optional fields
             account_id = get_val('cloud_account_id')
-            if account_id:
+            if account_id and str(account_id).strip():
                 record['cloud_account_id'] = str(account_id).strip()
             
             resource_id = get_val('resource_id')
-            if resource_id:
+            if resource_id and str(resource_id).strip():
                 record['resource_id'] = str(resource_id).strip()
             
             resource_group = get_val('resource_group')
-            if resource_group:
+            if resource_group and str(resource_group).strip():
                 record['tags'] = record.get('tags', {})
                 record['tags']['resource_group'] = str(resource_group).strip()
             
             region = get_val('region')
-            if region:
+            if region and str(region).strip():
                 record['region'] = str(region).strip()
             
             quantity = get_val('usage_quantity')
             if quantity is not None:
                 try:
-                    record['usage_quantity'] = float(quantity)
-                except:
+                    qty_float = float(quantity)
+                    if qty_float == qty_float:  # Check for NaN
+                        record['usage_quantity'] = qty_float
+                except (ValueError, TypeError):
                     pass
             
             unit = get_val('usage_unit')
-            if unit:
+            if unit and str(unit).strip():
                 record['usage_unit'] = str(unit).strip()
             
             currency = get_val('currency')
-            if currency:
+            if currency and str(currency).strip():
                 record['currency'] = str(currency).strip().upper()
             
             tags = parse_tags(get_val('tags'))
             if tags:
                 record['tags'] = {**record.get('tags', {}), **tags}
             
-            # Only add record if it has required fields
+            # Record should have all required fields
             if all(k in record for k in ['provider', 'service_name', 'cost', 'usage_start_date', 'usage_end_date']):
                 records.append(record)
+            else:
+                if parse_errors is not None:
+                    missing = [k for k in ['provider', 'service_name', 'cost', 'usage_start_date', 'usage_end_date'] if k not in record]
+                    parse_errors.append({'row': row_index, 'field': 'record', 'error': f'Missing required fields: {missing}'})
         
-        except Exception:
-            # Skip problematic rows
+        except Exception as e:
+            # Skip problematic rows and log the error
             if parse_errors is not None:
-                parse_errors.append({'row': row_index, 'field': 'row', 'error': 'Row parsing failed'})
+                parse_errors.append({'row': row_index, 'field': 'row', 'error': f'Row parsing failed: {str(e)}'})
             continue
     
     return records

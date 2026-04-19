@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { login } from '../../services/authService';
 import { Eye, EyeOff, LayoutDashboard, ArrowRight } from 'lucide-react';
 
@@ -9,9 +9,21 @@ function Login() {
     password: ''
   });
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    // Display success message from registration
+    if (location.state?.message) {
+      setSuccess(location.state.message);
+      if (location.state?.email) {
+        setFormData(prev => ({ ...prev, email: location.state.email }));
+      }
+    }
+  }, [location.state]);
 
   const handleChange = (e) => {
     setFormData({
@@ -73,6 +85,14 @@ function Login() {
             <div className="mb-6 px-4 py-3 rounded-lg border text-[13px]"
               style={{ backgroundColor: '#FEF2F2', borderColor: '#FECACA', color: '#991B1B' }}>
               {error}
+            </div>
+          )}
+
+          {/* Success */}
+          {success && (
+            <div className="mb-6 px-4 py-3 rounded-lg border text-[13px]"
+              style={{ backgroundColor: '#F0FDF4', borderColor: '#BBEF63', color: '#166534' }}>
+              ✓ {success}
             </div>
           )}
 

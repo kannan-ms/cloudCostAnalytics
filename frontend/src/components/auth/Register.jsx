@@ -58,8 +58,13 @@ function Register() {
       );
 
       if (response.user_id) {
-        setRegisteredEmail(response.email || formData.email);
-        setStep(2);
+        // Email verification skipped - redirect to login
+        navigate('/login', { 
+          state: { 
+            message: 'Account created successfully! Please login with your credentials.',
+            email: response.email || formData.email
+          } 
+        });
       }
     } catch (err) {
        setError(err.response?.data?.error || 'Registration failed. Please try again.');
