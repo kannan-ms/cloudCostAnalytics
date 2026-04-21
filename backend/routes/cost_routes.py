@@ -894,6 +894,24 @@ def get_top_resources(current_user_id):
 def upload_cost_file(current_user_id):
     """
     Upload and process CSV or Excel file with cost data.
+    
+    POST /api/costs/upload
+    
+    Query Parameters:
+    - mode: 'replace' (default) or 'append'
+      - replace: Delete old data and import new file only
+      - append: Keep existing data and add new file (for multi-cloud, e.g., AWS + Azure)
+    
+    Example:
+    - POST /api/costs/upload?mode=replace  (deletes old data, imports new file)
+    - POST /api/costs/upload?mode=append   (keeps old data, adds new file)
+    
+    Form Data:
+    - file: CSV or Excel file (.csv, .xlsx, .xls)
+    
+    Supported Formats:
+    - CSV with columns: provider, category, date, cost, region, account, service, etc.
+    - Excel with same column structure
     """
     try:
         # Check if file is in request
@@ -921,9 +939,17 @@ def upload_cost_file(current_user_id):
         records = result
         parse_summary = get_last_parse_summary()
 
-        # Clear existing data for a fresh start (per option 2 requirement)
-        cost_service.delete_all_costs_for_user(current_user_id)
-        anomaly_detector.delete_all_anomalies_for_user(current_user_id)
+        # Check upload mode: 'replace' (default) or 'append'
+        # ?mode=append to keep existing data and add new data (for multi-cloud like AWS + Azure)
+        # ?mode=replace (default) to delete old data and only keep new data
+        upload_mode = request.args.get('mode', 'replace').lower()
+        
+        if upload_mode == 'replace':
+            # Clear existing data for a fresh start
+            cost_service.delete_all_costs_for_user(current_user_id)
+            anomaly_detector.delete_all_anomalies_for_user(current_user_id)
+        elif upload_mode != 'append':
+            return jsonify({'error': 'Invalid mode parameter. Use "replace" or "append"'}), 400
         
         # Bulk ingest the parsed records
         success, ingest_result = cost_service.bulk_ingest_costs(current_user_id, records)
@@ -937,10 +963,16 @@ def upload_cost_file(current_user_id):
         # Determine status code
         if ingest_result['error_count'] == 0:
             status_code = 201
-            message = 'File processed successfully. All records imported.'
+            if upload_mode == 'append':
+                message = 'File processed successfully. Records appended to existing data.'
+            else:
+                message = 'File processed successfully. All records imported (previous data replaced).'
         elif ingest_result['success_count'] > 0:
             status_code = 207  # Multi-Status
-            message = f"File processed with warnings. {ingest_result['success_count']} records imported, {ingest_result['error_count']} failed."
+            if upload_mode == 'append':
+                message = f"File processed with warnings. {ingest_result['success_count']} records appended, {ingest_result['error_count']} failed."
+            else:
+                message = f"File processed with warnings. {ingest_result['success_count']} records imported (previous data replaced), {ingest_result['error_count']} failed."
         else:
             status_code = 400
             message = 'File processing failed. No records were imported.'
@@ -955,6 +987,7 @@ def upload_cost_file(current_user_id):
         return jsonify({
             'success': ingest_result['success_count'] > 0,
             'message': message,
+            'mode': upload_mode,
             'filename': file.filename,
             'total_records': ingest_result['total_records'],
             'success_count': ingest_result['success_count'],

@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Tuple, Optional, Any
 from bson import ObjectId
 from database import get_collection, Collections
-from services import insight_service
 import pandas as pd
 import numpy as np
 import logging
@@ -368,8 +367,6 @@ def get_detailed_forecast(
                     "history_points": res['history']
                 })
 
-        insights = insight_service.generate_insights(global_forecast, service_forecasts)
-
         # Calculate Growth & Risks (granularity-aware average per period)
         current_period_avg = 0
         if len(global_forecast['history']) > 0:
@@ -428,7 +425,6 @@ def get_detailed_forecast(
             "success": True,
             "global_forecast": global_forecast,
             "top_services_forecast": service_forecasts,
-            "insights": insights,
             "executive_summary": {
                 "total_predicted_cost": global_forecast['total_predicted_cost'],
                 "growth_percentage": round(growth_pct, 1),

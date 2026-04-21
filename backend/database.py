@@ -8,8 +8,6 @@ from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError, Confi
 from config import Config
 import logging
 
-# Configure logging - reduced verbosity
-logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 

@@ -14,8 +14,6 @@ from services import user_service
 from services import email_service
 from ml.category_mapper import SERVICE_CATEGORIES, get_category
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ML Imports

@@ -190,18 +190,6 @@ const Sidebar = ({ globalFilters = {}, onGlobalFilterChange }) => {
             Analysis
           </div>
           <NavItem
-            icon={Activity}
-            label="Insights"
-            path="/insights"
-            active={location.pathname === '/insights'}
-          />
-          <NavItem
-            icon={Lightbulb}
-            label="Recommendations"
-            path="/recommendations"
-            active={location.pathname === '/recommendations'}
-          />
-          <NavItem
             icon={FileText}
             label="Reports"
             path="/reports"

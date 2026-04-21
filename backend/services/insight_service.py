@@ -19,10 +19,45 @@ logger = logging.getLogger(__name__)
 
 # Constants
 MIN_PERCENTAGE_CHANGE = 15  # Percentage threshold for insights
-MIN_COST_DIFFERENCE = 100   # ₹ threshold for insights
+
+# Currency-specific thresholds and symbols
+CURRENCY_CONFIG = {
+    'USD': {'symbol': '$', 'min_cost_difference': 5, 'spike_threshold': 200},
+    'EUR': {'symbol': '€', 'min_cost_difference': 5, 'spike_threshold': 180},
+    'GBP': {'symbol': '£', 'min_cost_difference': 4, 'spike_threshold': 160},
+    'INR': {'symbol': '₹', 'min_cost_difference': 100, 'spike_threshold': 5000},
+    'JPY': {'symbol': '¥', 'min_cost_difference': 500, 'spike_threshold': 50000},
+    'CNY': {'symbol': '¥', 'min_cost_difference': 30, 'spike_threshold': 1500},
+}
+
 MIN_COST_AMOUNT = 10        # Ignore costs below this threshold
 SPIKE_MULTIPLIER = 1.5      # Cost spike = average * SPIKE_MULTIPLIER
 TOP_INSIGHTS_LIMIT = 3      # Return top N insights
+
+
+def get_currency_config(currency: str = 'USD') -> Dict:
+    """Get currency-specific configuration (symbol and thresholds)."""
+    return CURRENCY_CONFIG.get(currency.upper(), CURRENCY_CONFIG['USD'])
+
+
+def detect_cost_currency(cost_data: List[Dict]) -> str:
+    """
+    Detect the currency from cost records.
+    Returns the most common currency in the dataset, defaults to 'USD'.
+    """
+    if not cost_data:
+        return 'USD'
+    
+    currencies = [record.get('currency', 'USD') for record in cost_data if record.get('currency')]
+    if not currencies:
+        return 'USD'
+    
+    # Get most common currency
+    from collections import Counter
+    currency_counts = Counter(currencies)
+    most_common_currency = currency_counts.most_common(1)[0][0]
+    
+    return most_common_currency.upper()
 
 
 # ───────────────────────────────────────────────────────────────────────────
@@ -371,7 +406,7 @@ def calculate_confidence_score(data_points: int, consistency: float) -> float:
 # SMART COST INSIGHTS - MAIN GENERATION ENGINE
 # ───────────────────────────────────────────────────────────────────────────
 
-def generate_smart_insights(cost_data: List[Dict], period_days: int = 7) -> List[Dict]:
+def generate_smart_insights(cost_data: List[Dict], period_days: int = 7, currency: str = None) -> List[Dict]:
     """
     Generate comprehensive cost insights from cost data.
     
@@ -380,6 +415,7 @@ def generate_smart_insights(cost_data: List[Dict], period_days: int = 7) -> List
     Args:
         cost_data: List of cost records with date, service, region, cost fields
         period_days: Number of days for period comparison (default: 7)
+        currency: Currency code (USD, EUR, GBP, INR, etc.). If None, auto-detect from data.
     
     Returns:
         List of insight dictionaries with type, service, message, severity, confidence
@@ -389,13 +425,20 @@ def generate_smart_insights(cost_data: List[Dict], period_days: int = 7) -> List
     if not cost_data or len(cost_data) < 2:
         return insights
     
+    # Auto-detect currency if not provided
+    if not currency:
+        currency = detect_cost_currency(cost_data)
+    
+    currency_config = get_currency_config(currency)
+    min_cost_difference = currency_config['min_cost_difference']
+    
     try:
         # Split data into periods
         current_data, previous_data = split_into_periods(cost_data, period_days)
         
         if not current_data or not previous_data:
             # Fall back to spike detection only
-            return _detect_spike_insights(current_data)
+            return _detect_spike_insights(current_data, currency)
         
         # Get unique services
         services = set(r.get('service', 'Unknown') for r in cost_data if r.get('service'))
@@ -420,8 +463,8 @@ def generate_smart_insights(cost_data: List[Dict], period_days: int = 7) -> List
             percentage_change = get_percentage_change(current_cost, previous_cost)
             cost_difference = current_cost - previous_cost
             
-            # Check if insight threshold met
-            if abs(percentage_change) < MIN_PERCENTAGE_CHANGE and abs(cost_difference) < MIN_COST_DIFFERENCE:
+            # Check if insight threshold met (use currency-specific threshold)
+            if abs(percentage_change) < MIN_PERCENTAGE_CHANGE and abs(cost_difference) < min_cost_difference:
                 continue
             
             # Determine insight type
@@ -464,13 +507,14 @@ def generate_smart_insights(cost_data: List[Dict], period_days: int = 7) -> List
                 'previous_cost': round(previous_cost, 2),
                 'percentage_change': round(percentage_change, 2),
                 'cost_difference': round(cost_difference, 2),
-                'period_days': period_days
+                'period_days': period_days,
+                'currency': currency
             }
             
             insights.append(insight)
         
         # Add spike insights
-        spike_insights = _detect_spike_insights(current_data)
+        spike_insights = _detect_spike_insights(current_data, currency)
         insights.extend(spike_insights)
         
     except Exception as e:
@@ -491,17 +535,22 @@ def generate_smart_insights(cost_data: List[Dict], period_days: int = 7) -> List
     return insights[:TOP_INSIGHTS_LIMIT]
 
 
-def _detect_spike_insights(cost_data: List[Dict]) -> List[Dict]:
+def _detect_spike_insights(cost_data: List[Dict], currency: str = 'USD') -> List[Dict]:
     """
     Helper function to detect spike insights from cost data.
     
     Args:
         cost_data: Cost records with date, service, cost fields
+        currency: Currency code for formatting (default: USD)
     
     Returns:
         List of spike insights
     """
     spikes = []
+    currency_config = get_currency_config(currency)
+    currency_symbol = currency_config['symbol']
+    spike_threshold = currency_config['spike_threshold']
+    
     services = set(r.get('service', 'Unknown') for r in cost_data if r.get('service'))
     
     for service in services:
@@ -514,18 +563,19 @@ def _detect_spike_insights(cost_data: List[Dict]) -> List[Dict]:
             spike_date = spike.get('date', 'Unknown')
             excess_cost = spike.get('excess', 0)
             
-            message = f"Cost spike detected on {spike_date} for {service}: ₹{round(excess_cost, 2)} higher than average"
+            message = f"Cost spike detected on {spike_date} for {service}: {currency_symbol}{round(excess_cost, 2)} higher than average"
             
             insight = {
                 'type': 'spike',
                 'service': service,
                 'message': message,
-                'severity': 'high' if excess_cost > 200 else 'medium',
+                'severity': 'high' if excess_cost > spike_threshold else 'medium',
                 'confidence': 85.0,
                 'spike_date': spike_date,
                 'spike_cost': round(spike.get('cost', 0), 2),
                 'average_cost': round(spike.get('average', 0), 2),
-                'excess': round(excess_cost, 2)
+                'excess': round(excess_cost, 2),
+                'currency': currency
             }
             
             spikes.append(insight)

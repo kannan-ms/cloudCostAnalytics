@@ -3,14 +3,22 @@ Cloud Cost Behaviour Analytics and Anomaly Detection API
 Main Flask application entry point with MongoDB Atlas integration.
 """
 
-import os
 import logging
+
+# Suppress unnecessary logs but keep ERROR level visible
+logging.basicConfig(level=logging.WARNING)
+logging.getLogger('prophet').setLevel(logging.CRITICAL)
+logging.getLogger('prophet.plot').setLevel(logging.CRITICAL)
+logging.getLogger('werkzeug').setLevel(logging.WARNING)
+logging.getLogger('database').setLevel(logging.CRITICAL)
+logging.getLogger('__main__').setLevel(logging.WARNING)
+
 from dotenv import load_dotenv
 
 # Load environment variables before importing Config
 load_dotenv()
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify
 from flask_cors import CORS
 from config import Config
 from database import Database, create_indexes
@@ -19,7 +27,6 @@ from routes.cost_routes import cost_routes
 from routes.anomaly_routes import anomaly_routes
 from routes.forecast_routes import forecast_routes
 from routes.report_routes import report_routes
-from routes.recommendations_routes import recommendations_routes
 
 logger = logging.getLogger(__name__)
 
@@ -33,12 +40,10 @@ def create_app(config=Config):
     
     app.config.from_object(config)
     
-    # Initialize MongoDB connection and print visible startup status.
+    # Initialize MongoDB connection
     if Database.initialize():
         create_indexes()
-        print("Database status: connected")
     else:
-        print("Database status: disconnected (check MONGODB_URI in backend/.env)")
         logger.error("Failed to connect to MongoDB Atlas. Check MONGODB_URI in .env")
     
     # Enable CORS (include both /api/* and upload endpoint)
@@ -63,7 +68,6 @@ def create_app(config=Config):
     app.register_blueprint(anomaly_routes)
     app.register_blueprint(forecast_routes)
     app.register_blueprint(report_routes)
-    app.register_blueprint(recommendations_routes)
     from routes.budget_routes import budget_routes
     app.register_blueprint(budget_routes)
     from routes.ingestion_routes import ingestion_routes
@@ -148,18 +152,14 @@ def create_app(config=Config):
 
 
 if __name__ == '__main__':
-    import logging
-    import os
+    import warnings
+    warnings.filterwarnings('ignore')
     
-    # Keep startup and warning logs visible so local runs clearly show server status.
-    log = logging.getLogger('werkzeug')
-    log.setLevel(logging.INFO)
-    
-    app = create_app()
-
-    print("Server starting on http://127.0.0.1:5000")
-
     try:
+        app = create_app()
+        
+        print("Server starting on http://127.0.0.1:5000")
+
         # On Windows, Flask debug mode can hang. Use production mode for reliability.
         # The server will still reload route changes since use_reloader is handled internally.
         app.run(
@@ -170,8 +170,10 @@ if __name__ == '__main__':
             threaded=True
         )
     except KeyboardInterrupt:
-        logger.info("Server stopped")
+        print("\nServer stopped")
     except Exception as e:
-        logger.exception("Server error")
+        print(f"ERROR: {str(e)}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
     finally:
         Database.close()

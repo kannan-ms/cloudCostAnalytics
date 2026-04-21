@@ -7,7 +7,7 @@ from functools import wraps
 import jwt
 from config import Config
 from services import user_service, recommendation_service, cost_service
-from services.insight_service import generate_smart_insights, get_insights_summary, format_insights
+from services.insight_service import generate_smart_insights, get_insights_summary, format_insights, detect_cost_currency
 
 recommendations_routes = Blueprint('recommendations', __name__, url_prefix='/api/recommendations')
 
@@ -109,8 +109,11 @@ def get_smart_insights(current_user_id):
                 }
             }), 200
         
-        # Generate insights
-        insights = generate_smart_insights(cost_data, period_days=period_days)
+        # Detect currency from cost data
+        currency = detect_cost_currency(cost_data)
+        
+        # Generate insights with detected currency
+        insights = generate_smart_insights(cost_data, period_days=period_days, currency=currency)
         
         # Format output
         if format_type == 'summary':
@@ -191,9 +194,12 @@ def get_insights(current_user_id):
                 }
             }), 200
         
+        # Detect currency from cost data
+        currency = detect_cost_currency(cost_data)
+        
         # Generate insights with period = days (splits 2x data into 2 periods of 'days' each)
         try:
-            insights = generate_smart_insights(cost_data, period_days=days)
+            insights = generate_smart_insights(cost_data, period_days=days, currency=currency)
         except Exception as e:
             import logging
             logging.error(f"Error in generate_smart_insights: {str(e)}", exc_info=True)

@@ -13,7 +13,7 @@ export default defineConfig({
             return 'react-vendor';
           }
 
-          if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-vendor')) {
+          if (id.includes('recharts') || id.includes('d3-')) {
             return 'charts-vendor';
           }
 
@@ -21,7 +21,7 @@ export default defineConfig({
             return 'icons-vendor';
           }
 
-          if (id.includes('axios') || id.includes('@babel/runtime')) {
+          if (id.includes('axios')) {
             return 'utils-vendor';
           }
         }

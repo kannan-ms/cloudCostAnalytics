@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Upload, Download, FileSpreadsheet, X, CheckCircle, AlertTriangle, Lightbulb, File } from 'lucide-react';
+import { Upload, Download, FileSpreadsheet, X, CheckCircle, AlertTriangle, Lightbulb, File, Merge2, Trash2 } from 'lucide-react';
 import api from '../../services/api';
 
 const FileUpload = ({ onUploadSuccess, onSwitchToOverview }) => {
@@ -8,6 +8,7 @@ const FileUpload = ({ onUploadSuccess, onSwitchToOverview }) => {
   const [uploadResult, setUploadResult] = useState(null);
   const [error, setError] = useState(null);
   const [dragActive, setDragActive] = useState(false);
+  const [uploadMode, setUploadMode] = useState('replace'); // 'replace' or 'append'
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -64,9 +65,9 @@ const FileUpload = ({ onUploadSuccess, onSwitchToOverview }) => {
     formData.append('file', file);
 
     try {
-      // Axios automatically sets the Content-Type to multipart/form-data with the correct boundary
-      // when a FormData object is passed as the body.
-      const response = await api.post('/costs/upload', formData);
+      // Use the mode parameter in the URL query string
+      const url = `/costs/upload?mode=${uploadMode}`;
+      const response = await api.post(url, formData);
 
       setUploadResult(response.data);
 
@@ -245,6 +246,50 @@ const FileUpload = ({ onUploadSuccess, onSwitchToOverview }) => {
                 Go to Dashboard
                 </button>
             )}
+        </div>
+      )}
+
+      {/* Upload Mode Selection */}
+      {file && !uploadResult && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <p className="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-2">
+            Upload Mode
+          </p>
+          <div className="space-y-2">
+            <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg bg-white border-2 border-blue-200 hover:border-blue-400 transition-colors" style={{borderColor: uploadMode === 'replace' ? '#3b82f6' : '#e5e7eb'}}>
+              <input
+                type="radio"
+                name="uploadMode"
+                value="replace"
+                checked={uploadMode === 'replace'}
+                onChange={(e) => setUploadMode(e.target.value)}
+                className="w-4 h-4 cursor-pointer"
+              />
+              <div className="flex-1">
+                <p className="font-medium text-slate-900 text-sm flex items-center gap-1">
+                  <Trash2 size={16} /> Replace All Data
+                </p>
+                <p className="text-xs text-slate-500">Delete existing data and import only this file</p>
+              </div>
+            </label>
+
+            <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg bg-white border-2 hover:border-blue-400 transition-colors" style={{borderColor: uploadMode === 'append' ? '#3b82f6' : '#e5e7eb'}}>
+              <input
+                type="radio"
+                name="uploadMode"
+                value="append"
+                checked={uploadMode === 'append'}
+                onChange={(e) => setUploadMode(e.target.value)}
+                className="w-4 h-4 cursor-pointer"
+              />
+              <div className="flex-1">
+                <p className="font-medium text-slate-900 text-sm flex items-center gap-1">
+                  <Merge2 size={16} /> Merge with Existing Data
+                </p>
+                <p className="text-xs text-slate-500">Keep existing data and add this file (for multi-cloud like AWS + Azure)</p>
+              </div>
+            </label>
+          </div>
         </div>
       )}
 
