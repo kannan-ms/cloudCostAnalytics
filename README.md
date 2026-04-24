@@ -19,7 +19,6 @@ CloudInsight is a full-stack FinOps platform for analyzing multi-cloud spend (AW
 - Cost forecasting (Prophet with sklearn fallback)
 - Budget tracking with alerts
 - Downloadable reports (CSV, TXT, PDF)
-- Optimization recommendations
 
 ---
 
@@ -28,7 +27,7 @@ CloudInsight is a full-stack FinOps platform for analyzing multi-cloud spend (AW
 ### Frontend
 - React (Vite)
 - Tailwind CSS
-- Recharts and Chart.js
+- Recharts
 - Axios
 - React Router
 - Route-level and view-level lazy loading (React.lazy + Suspense)
@@ -88,7 +87,6 @@ cloudProject/
 │       │   ├── forecast/
 │       │   ├── integration/
 │       │   ├── layout/
-│       │   ├── recommendations/
 │       │   └── reports/
 │       ├── services/
 │       └── utils/

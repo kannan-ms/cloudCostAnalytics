@@ -8,7 +8,9 @@ from functools import wraps
 import jwt
 import logging
 from datetime import datetime
+from bson import ObjectId
 from config import Config
+from database import get_collection, Collections
 from services import cost_service, user_service, anomaly_detector
 from services.file_parser import parse_file, get_last_parse_summary
 
@@ -50,8 +52,9 @@ def token_required(f):
             return jsonify({'error': 'Token has expired'}), 401
         except jwt.InvalidTokenError:
             return jsonify({'error': 'Invalid token'}), 401
-        except Exception as e:
-            return jsonify({'error': f'Authentication error: {str(e)}'}), 401
+        except Exception:
+            logger.exception("Unexpected authentication error")
+            return jsonify({'error': 'Authentication failed'}), 401
     
     return decorated
 
@@ -536,8 +539,6 @@ def get_category_daily_trends(current_user_id):
     """
     try:
         from ml.category_mapper import map_service_to_category
-        from datetime import timedelta
-        import math
 
         month_str = request.args.get('month')
         if not month_str:

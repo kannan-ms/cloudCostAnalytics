@@ -12,7 +12,6 @@ import {
   Shield,
   ArrowRight,
   BarChart3,
-  ChevronDown,
 } from 'lucide-react';
 import { FaMicrosoft, FaAws, FaGoogle } from 'react-icons/fa';
 import api from '../../services/api';
