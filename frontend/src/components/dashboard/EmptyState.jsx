@@ -1,6 +1,6 @@
 import React from 'react';
 import { Cloud, Upload, Zap, Shield, BarChart3 } from 'lucide-react';
-
+//all important files are imported to this file
 const EmptyState = ({ onUploadClick }) => {
     return (
         <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-slate-50/50">
